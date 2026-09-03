@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#06101c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Mobil tarayici icin 5v5 MOBA - Rift Mobil" />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Rift Mobil</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+      <div id="overlay"></div>
+      <div id="rotate">
+        <div class="rotate-inner">
+          <div class="rotate-icon">📱↻</div>
+          <div class="rotate-title">Telefonu yan cevir</div>
+          <div class="rotate-text">Rift Mobil yatay ekranda cok daha rahat oynanir.</div>
+          <button class="btn small ghost" id="rotate-dismiss">Yine de oyna</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

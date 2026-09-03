@@ -1,0 +1,11 @@
+{
+  "appId": "com.rift.mobil",
+  "appName": "Rift Mobil",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#06101c"
+  }
+}

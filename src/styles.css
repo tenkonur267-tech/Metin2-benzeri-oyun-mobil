@@ -1,0 +1,249 @@
+:root {
+  --bg: #06101c;
+  --panel: rgba(10, 22, 38, 0.94);
+  --panel-2: rgba(16, 32, 52, 0.94);
+  --line: rgba(120, 190, 255, 0.22);
+  --gold: #f0c26a;
+  --blue: #46b4ff;
+  --red: #ff6a5e;
+  --text: #e6f1ff;
+  --muted: #8fa8c4;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app { position: fixed; inset: 0; }
+
+#game {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+#overlay > * { pointer-events: auto; }
+
+/* ---------- Genel panel ---------- */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background: radial-gradient(120% 90% at 50% 0%, #123055 0%, #06101c 62%, #030812 100%);
+  overflow: hidden;
+}
+
+.screen.transparent {
+  background: rgba(4, 11, 20, 0.94);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.screen h1 {
+  margin: 4px 0 2px;
+  font-size: clamp(22px, 6vw, 40px);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #ffe9b8, #d8a145);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-align: center;
+}
+
+.screen .sub {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.scroll { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, #1b3b60, #102542);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.btn:active { transform: translateY(1px); filter: brightness(1.15); }
+.btn.primary {
+  background: linear-gradient(180deg, #c9973f, #8d6316);
+  border-color: #f0c26a;
+  color: #14100a;
+}
+.btn.ghost { background: rgba(255, 255, 255, 0.05); }
+.btn.small { padding: 8px 12px; font-size: 13px; border-radius: 10px; }
+.btn:disabled { opacity: 0.42; }
+
+.row { display: flex; gap: 10px; align-items: center; }
+.row.wrap { flex-wrap: wrap; }
+.grow { flex: 1; }
+
+/* ---------- Sampiyon secimi ---------- */
+.champ-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+  padding: 4px 2px 10px;
+}
+
+.champ-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px;
+  background: var(--panel);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .12s, transform .12s;
+}
+.champ-card.sel { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; transform: translateY(-2px); }
+.champ-card .portrait {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+.champ-card .name { font-size: 13px; font-weight: 700; }
+.champ-card .role { font-size: 11px; color: var(--muted); }
+
+.detail {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+.detail .title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+.detail .lore { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.ability-line { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-size: 12px; }
+.ability-key {
+  flex: 0 0 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: #16304f;
+  border: 1px solid var(--line);
+  font-weight: 800;
+  color: var(--gold);
+}
+.ability-body b { color: #cfe6ff; }
+
+/* ---------- Magaza ---------- */
+.shop-head {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px;
+}
+.gold { color: var(--gold); font-weight: 800; }
+.item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.item-card {
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+  padding: 8px; display: flex; gap: 8px; align-items: flex-start; cursor: pointer;
+}
+.item-card.cant { opacity: 0.45; }
+.item-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 18px; flex: 0 0 34px; }
+.item-name { font-size: 12.5px; font-weight: 700; }
+.item-stats { font-size: 11px; color: var(--muted); line-height: 1.35; }
+.item-cost { font-size: 11.5px; }
+
+.inv-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 10px; }
+.inv-slot {
+  width: 40px; height: 40px; border-radius: 9px; border: 1px dashed var(--line);
+  display: grid; place-items: center; font-size: 18px; background: rgba(255,255,255,.03);
+}
+.inv-slot.filled { border-style: solid; background: var(--panel-2); cursor: pointer; }
+
+/* ---------- Skor tablosu / sonuc ---------- */
+table.score { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.score th, table.score td { padding: 6px 5px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.07); }
+table.score th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+.team-blue { color: var(--blue); }
+.team-red { color: var(--red); }
+
+.result-banner {
+  text-align: center; font-size: clamp(30px, 11vw, 64px); font-weight: 900;
+  letter-spacing: 6px; margin: 18px 0 6px;
+}
+.result-banner.win { color: #7ff0b0; text-shadow: 0 0 24px rgba(80,240,160,.4); }
+.result-banner.lose { color: #ff8b7f; text-shadow: 0 0 24px rgba(255,110,90,.35); }
+
+.toast-wrap {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 5px; align-items: center; pointer-events: none;
+  z-index: 40; width: min(90vw, 460px);
+}
+.toast {
+  background: rgba(6, 16, 28, .86); border: 1px solid var(--line); border-radius: 9px;
+  padding: 5px 12px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.kbd {
+  display: inline-block; border: 1px solid var(--line); border-radius: 5px;
+  padding: 0 5px; font-size: 11px; color: var(--gold); background: rgba(255,255,255,.05);
+}
+
+/* ---------- Yatay ekran uyarisi ---------- */
+#rotate { display: none; }
+
+@media (orientation: portrait) {
+  #rotate {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(120% 90% at 50% 20%, #12304f 0%, #06101c 70%);
+    text-align: center;
+    padding: 24px;
+  }
+  body.rotate-ok #rotate { display: none; }
+}
+
+.rotate-inner { max-width: 320px; }
+.rotate-icon { font-size: 54px; margin-bottom: 10px; animation: tilt 2.2s ease-in-out infinite; }
+.rotate-title { font-size: 19px; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; }
+.rotate-text { color: var(--muted); font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+
+@keyframes tilt {
+  0%, 55%, 100% { transform: rotate(0deg); }
+  70%, 90% { transform: rotate(90deg); }
+}

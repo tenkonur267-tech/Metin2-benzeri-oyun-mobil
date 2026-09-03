@@ -1,0 +1,21 @@
+{
+  "name": "rift-mobil",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mobil tarayici icin League of Legends benzeri 5v5 MOBA",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "check:map": "esbuild scripts/mapcheck.ts --bundle --platform=node --format=cjs --outfile=node_modules/.tmp-mapcheck.cjs --log-level=warning && node node_modules/.tmp-mapcheck.cjs",
+    "sim": "esbuild scripts/simtest.ts --bundle --platform=node --format=cjs --outfile=node_modules/.tmp-sim.cjs --log-level=warning && node node_modules/.tmp-sim.cjs",
+    "test": "npm run typecheck && npm run check:map"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
