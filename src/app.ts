@@ -1,3 +1,4 @@
+import { sfx } from "./core/audio";
 import { clamp, dist, norm, type Vec2 } from "./core/math";
 import { castAbility, castSummoner, type AimInput } from "./game/abilities";
 import type { Champion } from "./game/champion";
@@ -44,6 +45,18 @@ export class App {
     this.overlay = overlay;
     this.layout = computeLayout(window.innerWidth, window.innerHeight);
     this.bindEvents();
+    // Ses tercihini hatirla
+    try {
+      sfx.setEnabled(localStorage.getItem("rift-sound") !== "0");
+    } catch {
+      /* depolama kapali olabilir */
+    }
+    const unlock = (): void => {
+      sfx.init();
+      sfx.resume();
+    };
+    window.addEventListener("pointerdown", unlock, { once: false });
+    window.addEventListener("keydown", unlock, { once: false });
     this.resize();
     this.openMenu();
     this.loop(performance.now());
@@ -213,6 +226,16 @@ export class App {
     if (inCircle(L.autoToggle, p.x, p.y, 8)) {
       ui.autoAttack = !ui.autoAttack;
       this.toast(ui.autoAttack ? "Otomatik saldiri: ACIK" : "Otomatik saldiri: KAPALI");
+      return;
+    }
+    if (inCircle(L.soundToggle, p.x, p.y, 8)) {
+      sfx.setEnabled(!sfx.enabled);
+      try {
+        localStorage.setItem("rift-sound", sfx.enabled ? "1" : "0");
+      } catch {
+        /* depolama kapali olabilir */
+      }
+      this.toast(sfx.enabled ? "Ses: ACIK" : "Ses: KAPALI");
       return;
     }
     if (inRect(L.minimap, p.x, p.y)) return;

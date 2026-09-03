@@ -1,3 +1,4 @@
+import { sfx } from "../core/audio";
 import { clamp, dist, dist2, dirTo, norm, type Vec2 } from "../core/math";
 import { Rng } from "../core/rng";
 import {
@@ -420,6 +421,7 @@ export class World {
       const s = unit as Structure;
       this.fx.death(unit.pos, "#ffd27a");
       this.fx.ring(unit.pos, 90, "#ffb347", 0.9, 5);
+      sfx.play("tower");
       this.onStructureDestroyed(s, killer);
       return;
     }
@@ -432,6 +434,8 @@ export class World {
       c.effects.length = 0;
       c.recallTimer = 0;
       this.fx.death(c.pos, c.def.color);
+      if (c.isPlayer) sfx.play("death");
+      else if (killer && killer.kind === "champion" && (killer as Champion).isPlayer) sfx.play("kill");
       this.grantChampionKill(c, killer, label);
     }
   }
@@ -446,6 +450,7 @@ export class World {
       c.cs++;
       this.teams[c.team].gold += gold;
       this.fx.goldNumber(m.pos, gold);
+      if (c.isPlayer) sfx.play("coin");
     }
     // Tecrube cevredeki tum dusman sampiyonlara paylastirilir
     const nearby = this.champions.filter(
@@ -503,6 +508,7 @@ export class World {
     } else if (s.kind === "nexus") {
       this.winner = enemy;
       this.log(`${this.teamName(enemy)} takim ZAFERI kazandi!`, "#ffe08a");
+      sfx.play(enemy === this.player.team ? "win" : "lose");
     }
   }
 
@@ -731,6 +737,7 @@ export class World {
         this.teams[t].towers * 1000 + this.teams[t].kills * 10 + (1 - this.nexus[t].hpPct) * -500;
       this.winner = score(0) >= score(1) ? 0 : 1;
       this.log("Sure doldu!", "#ffe08a");
+      sfx.play(this.winner === this.player.team ? "win" : "lose");
     }
   }
 

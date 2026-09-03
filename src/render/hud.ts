@@ -1,3 +1,4 @@
+import { sfx } from "../core/audio";
 import { clamp, type Vec2 } from "../core/math";
 import { CONFIG, LANES, MAP_SIZE, TEAM_COLORS, lanePath } from "../game/constants";
 import type { Champion } from "../game/champion";
@@ -482,6 +483,15 @@ function drawButtons(
     ui.autoAttack ? "#a8e08a" : "#ff9b8f",
     "🤖",
     L.autoToggle.r,
+    1,
+  );
+  circleButton(
+    g,
+    L.soundToggle,
+    sfx.enabled ? "#141f2e" : "#2a1a1a",
+    sfx.enabled ? "#a8e6ff" : "#ff9b8f",
+    sfx.enabled ? "🔊" : "🔇",
+    L.soundToggle.r,
     1,
   );
 }

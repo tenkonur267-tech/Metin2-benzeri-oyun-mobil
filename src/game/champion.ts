@@ -1,3 +1,4 @@
+import { sfx } from "../core/audio";
 import { clamp, dist, type Vec2 } from "../core/math";
 import { CONFIG, NEXUS_POS, RADIUS, SPAWN_POS, XP_TABLE, levelFromXp } from "./constants";
 import { getItem, MAX_ITEMS } from "./items";
@@ -211,6 +212,7 @@ export class Champion extends Unit {
       this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.maxHp * 0.12 * gained);
       this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.maxMp * 0.12 * gained);
       world.fx.levelUp(this.pos, this.team);
+      if (this.isPlayer) sfx.play("level");
     }
   }
 
@@ -336,6 +338,7 @@ export class Champion extends Unit {
     this.recallTimer = CONFIG.recallTime;
     this.stopMoving();
     world.fx.recallStart(this.pos, this.team);
+    if (this.isPlayer) sfx.play("recall");
   }
 
   cancelRecall(): void {
@@ -349,6 +352,7 @@ export class Champion extends Unit {
     if (emp) dmg += emp.bonus;
 
     if (this.def.ranged) {
+      if (this.isPlayer) sfx.play(crit ? "crit" : "hit");
       world.spawnAutoProjectile(this, target, dmg, crit, emp?.slow);
     } else {
       world.fx.slash(this.pos, target.pos, this.team);
@@ -360,6 +364,7 @@ export class Champion extends Unit {
         label: emp ? emp.label : "saldiri",
       });
       if (crit) world.fx.critMark(target.pos);
+      if (this.isPlayer) sfx.play(crit ? "crit" : "hit");
       if (emp?.slow) {
         target.addEffect({
           id: `slow_${this.id}`,

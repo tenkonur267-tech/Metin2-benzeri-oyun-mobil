@@ -1,3 +1,4 @@
+import { sfx } from "../core/audio";
 import { clamp, dirTo, dist, inCone, norm, rad, type Vec2 } from "../core/math";
 import type { Champion } from "./champion";
 import { isBlockedCircle } from "./grid";
@@ -640,6 +641,7 @@ export function castAbility(world: World, c: Champion, key: "Q" | "W" | "E" | "R
   st.cd = c.cooldownFor(key);
   c.castAnim = 0.3;
   c.castAnimKey = key;
+  if (c.isPlayer) sfx.play(key === "R" ? "ult" : "cast");
   c.cancelRecall();
   if (c.hasEffect("stealth") && (key === "Q" || key === "R")) c.removeEffect("golge_w");
   return true;
@@ -688,5 +690,6 @@ export function castSummoner(world: World, c: Champion, index: number, aim: AimI
   }
   slot.cd = slot.spell.cd;
   c.cancelRecall();
+  if (c.isPlayer) sfx.play("cast");
   return true;
 }
