@@ -6,6 +6,7 @@ import type { World } from "../game/world";
 import type { HudLayout } from "./layout";
 import type { Renderer } from "./renderer";
 import { roundRect } from "./mapCanvas";
+import { championPortrait } from "./portrait";
 
 export type AbilityKey = "Q" | "W" | "E" | "R";
 export type AimKey = AbilityKey | "D" | "F";
@@ -116,21 +117,24 @@ function drawPlayerPanel(g: CanvasRenderingContext2D, world: World, L: HudLayout
   g.lineWidth = 1;
   g.stroke();
 
-  // Portre
+  // Portre (oyun ici sprite'inin kucuk hali)
   const pr = 19;
   const pcx = x + pr + 6;
   const pcy = y + h / 2;
-  g.fillStyle = p.def.color;
+  const portrait = championPortrait(p.def.id, pr * 2, TEAM_COLORS[p.team]);
+  g.save();
   g.beginPath();
   g.arc(pcx, pcy, pr, 0, Math.PI * 2);
-  g.fill();
+  g.clip();
+  g.drawImage(portrait, pcx - pr, pcy - pr, pr * 2, pr * 2);
+  g.restore();
   g.strokeStyle = TEAM_COLORS[p.team];
   g.lineWidth = 2;
+  g.beginPath();
+  g.arc(pcx, pcy, pr, 0, Math.PI * 2);
   g.stroke();
-  g.font = `19px ${FONT}`;
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.fillText(p.def.emoji, pcx, pcy + 1);
 
   // Seviye rozeti
   g.fillStyle = "#0d1622";

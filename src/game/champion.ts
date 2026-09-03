@@ -347,6 +347,7 @@ export class Champion extends Unit {
 
   protected override landAutoAttack(world: World, target: Unit): void {
     const emp = this.empoweredAttack;
+    this.swing = 0.24;
     const crit = Math.random() < this.stats.crit;
     let dmg = this.stats.ad * (crit ? 1.75 : 1);
     if (emp) dmg += emp.bonus;

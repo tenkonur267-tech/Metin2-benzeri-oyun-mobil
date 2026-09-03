@@ -719,6 +719,7 @@ export class World {
     for (const s of this.structures) s.update(this, dt);
     for (const m of this.monsters) m.update(this, dt);
 
+    for (const u of this.allUnits()) u.tickAnim(dt);
     this.updateProjectiles(dt);
     this.updateZones(dt);
     this.separateUnits();

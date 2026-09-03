@@ -5,6 +5,7 @@ import type { World } from "../game/world";
 import { TEAM_NAMES } from "../game/constants";
 import { clear, el, onTap } from "./dom";
 import { ABILITY_ICON } from "../render/hud";
+import { championPortrait } from "../render/portrait";
 
 export interface MenuResult {
   championId: string;
@@ -30,10 +31,21 @@ export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void
   const renderDetail = (): void => {
     const c = CHAMPIONS.find((x) => x.id === selected)!;
     clear(detail);
-    detail.append(
-      el("div", { class: "title" }, `${c.emoji} ${c.name} — ${c.title}`),
-      el("div", { class: "lore" }, `${c.role} • ${c.ranged ? "Menzilli" : "Yakin dovus"} — ${c.lore}`),
+    const head = el("div", { class: "detail-head" });
+    head.append(championPortrait(c.id, 54, "#4aa8ff"));
+    head.append(
+      el(
+        "div",
+        {},
+        el("div", { class: "title" }, `${c.name} — ${c.title}`),
+        el(
+          "div",
+          { class: "lore" },
+          `${c.role} • ${c.ranged ? "Menzilli" : "Yakin dovus"} — ${c.lore}`,
+        ),
+      ),
     );
+    detail.append(head);
     for (const a of c.abilities) {
       detail.append(
         el(
@@ -53,8 +65,8 @@ export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void
     clear(grid);
     for (const c of CHAMPIONS) {
       const card = el("div", { class: `champ-card${c.id === selected ? " sel" : ""}` });
-      const portrait = el("div", { class: "portrait" }, c.emoji);
-      portrait.style.background = `radial-gradient(circle at 30% 25%, ${c.color}, rgba(0,0,0,.55))`;
+      const portrait = el("div", { class: "portrait" });
+      portrait.append(championPortrait(c.id, 96, "#4aa8ff"));
       card.append(portrait, el("div", { class: "name" }, c.name), el("div", { class: "role" }, c.role));
       onTap(card, () => {
         selected = c.id;

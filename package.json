@@ -11,9 +11,15 @@
     "typecheck": "tsc --noEmit",
     "check:map": "esbuild scripts/mapcheck.ts --bundle --platform=node --format=cjs --outfile=node_modules/.tmp-mapcheck.cjs --log-level=warning && node node_modules/.tmp-mapcheck.cjs",
     "sim": "esbuild scripts/simtest.ts --bundle --platform=node --format=cjs --outfile=node_modules/.tmp-sim.cjs --log-level=warning && node node_modules/.tmp-sim.cjs",
-    "test": "npm run typecheck && npm run check:map"
+    "test": "npm run typecheck && npm run check:map",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "assets:generate": "npx --yes @capacitor/assets generate --android --iconBackgroundColor '#0b1c30' --iconBackgroundColorDark '#0b1c30' --splashBackgroundColor '#06101c' --splashBackgroundColorDark '#06101c'"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/cli": "^6.2.2",
+    "@capacitor/core": "^6.2.2",
     "@types/node": "^26.4.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"

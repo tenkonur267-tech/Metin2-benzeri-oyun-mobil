@@ -1,0 +1,91 @@
+name: Android APK
+
+on:
+  push:
+    branches: [claude/mobile-lol-game-0tjq8j, main]
+    paths-ignore: ["README.md", "docs/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android SDK bilesenlerini hazirla
+        run: |
+          set -e
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" > /dev/null || true
+
+      - name: Bagimliliklar
+        run: npm ci
+
+      - name: Web uygulamasini derle
+        run: npm run build
+
+      - name: Capacitor senkronizasyonu
+        run: npx cap sync android
+
+      - name: APK derle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: APK'yi adlandir
+        id: apk
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          NAME="rift-mobil-${VERSION}-build${GITHUB_RUN_NUMBER}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$NAME"
+          ls -la "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Yapiti yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: rift-mobil-apk
+          path: ${{ steps.apk.outputs.name }}
+          retention-days: 30
+
+      - name: Surum olarak yayinla
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG=apk-latest
+          NOTES="Rift Mobil son APK (yapim #${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA:0:7}).
+
+          Kurulum: APK'yi telefonuna indir, Android \"bilinmeyen kaynaklardan yukleme\" iznini ver ve dosyayi ac.
+          Bu bir hata ayiklama (debug) imzali pakettir; Play Store'a yuklemek icin kendi imza anahtarinla yeniden imzalanmalidir."
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" \
+              --title "Rift Mobil APK (son surum)" \
+              --notes "$NOTES" \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
+          gh release upload "$TAG" "${{ steps.apk.outputs.name }}" --clobber

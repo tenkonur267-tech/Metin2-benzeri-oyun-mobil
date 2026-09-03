@@ -91,10 +91,37 @@ export abstract class Unit {
   /** Olum animasyonu icin. */
   deathTimer = 0;
 
+  // --- Animasyon durumu (cizim katmani tarafindan okunur) ---
+  /** Bir onceki karedeki konum; hiz ve yuruyus dongusu icin. */
+  lastPos: Vec2 = { x: 0, y: 0 };
+  /** Yuruyus dongusu fazi (kat edilen mesafeyle artar). */
+  walkPhase = 0;
+  /** Anlik hiz (birim/sn). */
+  speedNow = 0;
+  /** Saldiri savurma animasyonu (saniye). */
+  swing = 0;
+  /** Hasar alinca beyaz parlama (saniye). */
+  hitFlash = 0;
+
   constructor(team: Team, pos: Vec2, radius: number) {
     this.team = team;
     this.pos = { x: pos.x, y: pos.y };
+    this.lastPos = { x: pos.x, y: pos.y };
     this.radius = radius;
+  }
+
+  /** Her karede cizim animasyonlarini ilerletir. */
+  tickAnim(dt: number): void {
+    const dx = this.pos.x - this.lastPos.x;
+    const dy = this.pos.y - this.lastPos.y;
+    const moved = Math.hypot(dx, dy);
+    this.speedNow = moved / Math.max(dt, 1e-4);
+    this.walkPhase += moved * 0.32;
+    this.lastPos.x = this.pos.x;
+    this.lastPos.y = this.pos.y;
+    this.swing = Math.max(0, this.swing - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.deathTimer = this.alive ? 0 : this.deathTimer + dt;
   }
 
   // -------------------------------------------------------------------------
@@ -231,6 +258,7 @@ export abstract class Unit {
 
     const applied = remaining;
     this.hp -= applied;
+    if (applied > 0) this.hitFlash = 0.12;
     if (applied > 0 && this.kind === "champion") {
       (this as unknown as { lastDamageTime: number }).lastDamageTime = world.time;
     }
@@ -386,6 +414,7 @@ export abstract class Unit {
   protected landAutoAttack(world: World, target: Unit): void {
     const crit = Math.random() < this.stats.crit;
     const dmg = this.stats.ad * (crit ? 1.75 : 1);
+    this.swing = 0.24;
     if (this.isRanged) {
       world.spawnAutoProjectile(this, target, dmg, crit);
     } else {
@@ -616,6 +645,7 @@ export class Structure extends Unit {
   protected override landAutoAttack(world: World, target: Unit): void {
     const bonus = 1 + Math.min(2, this.shotCount * 0.35);
     this.shotCount++;
+    this.swing = 0.24;
     world.spawnTowerShot(this, target, this.stats.ad * bonus);
   }
 

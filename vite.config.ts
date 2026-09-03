@@ -7,5 +7,16 @@ const base = process.env.GITHUB_PAGES === "true" ? "/Metin2-benzeri-oyun-mobil/"
 export default defineConfig({
   base,
   server: { host: true, port: 5173 },
-  build: { target: "es2020", outDir: "dist", sourcemap: false },
+  build: {
+    target: "es2020",
+    outDir: "dist",
+    sourcemap: false,
+    rollupOptions: {
+      // Oyun + gelistirici sprite galerisi
+      input: {
+        main: "index.html",
+        sprites: "sprites.html",
+      },
+    },
+  },
 });

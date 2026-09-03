@@ -73,6 +73,8 @@ npm run typecheck  # TypeScript kontrolu
 npm run check:map  # harita dogrulamasi (koridorlar tikali mi, kamplar duvarda mi)
 npm run sim        # 10 botla basli olmayan mac simulasyonu (denge testi)
 npm test           # typecheck + harita kontrolu
+npm run android:apk    # APK uret (Android SDK gerekir)
+npm run assets:generate # uygulama simgesi/acilis ekrani uret
 ```
 
 `npm run sim kaya 42` seklinde sampiyon ve tohum verebilirsin.
@@ -94,18 +96,31 @@ https://tenkonur267-tech.github.io/Metin2-benzeri-oyun-mobil/
 Telefonda ac → tarayici menusunden **"Ana ekrana ekle"** → tam ekran, cevrimdisi
 calisan bir uygulama gibi acilir (PWA + servis calisani).
 
-### 2) Android APK (istege bagli)
-Bilgisayar erisimin olursa:
+### 2) Android APK — hazir indirilebilir paket
+Her push'ta `.github/workflows/android.yml` Capacitor + Gradle ile **APK**
+uretir ve `apk-latest` etiketli surume yukler. Telefondan indirme adresi:
 
-```bash
-npm i -D @capacitor/cli @capacitor/core @capacitor/android
-npm run build
-npx cap add android
-npx cap sync
-npx cap open android      # Android Studio'da APK/AAB uret
+```
+https://github.com/tenkonur267-tech/Metin2-benzeri-oyun-mobil/releases/tag/apk-latest
 ```
 
-`capacitor.config.json` hazir; `webDir` olarak `dist` kullanilir.
+Kurulum: APK'yi telefonuna indir → Android "bilinmeyen kaynaklardan yukleme"
+iznini ver → dosyayi ac. Uygulama tam ekran ve yatay modda acilir, oyun
+sirasinda ekran kapanmaz.
+
+> Paket **debug** anahtariyla imzalanmistir; dogrudan kurulur ama Google Play'e
+> yuklemek icin kendi imza anahtarinla `assembleRelease` alip imzalaman gerekir.
+
+Bilgisayarda uretmek istersen (Android SDK + JDK 17 gerekir):
+
+```bash
+npm run android:apk     # dist -> cap sync -> gradlew assembleDebug
+# cikti: android/app/build/outputs/apk/debug/app-debug.apk
+npx cap open android    # ya da Android Studio'da ac
+```
+
+Uygulama simgesi ve acilis ekrani `assets/` altindaki kaynaklardan
+`npm run assets:generate` ile uretilir.
 
 ---
 
@@ -127,15 +142,47 @@ src/
 │  ├─ projectile  mermi ve alan efekti tanimlari
 │  ├─ fx          hasar sayilari, parcaciklar, halkalar
 │  └─ world       simulasyon: dalgalar, gorunurluk, olum/odul, kazanan
-├─ render/        kamera, statik harita cizimi, birim cizimi, HUD, yerlesim
+├─ render/
+│  ├─ models      sampiyon/canavar model tanimlari (renk, silah, baslik)
+│  ├─ sprites     prosedurel karakter, minyon, yapi ve canavar cizimi
+│  ├─ portrait    sprite'tan menu/HUD portresi uretimi
+│  ├─ renderer    kamera, savas sisi, birim ve efekt cizimi
+│  ├─ mapCanvas   statik harita katmani (bir kez cizilir)
+│  ├─ hud         dokunmatik kontroller, minimap, paneller
+│  └─ layout      ekran boyutuna gore dugme yerlesimi
+├─ dev/           sprite galerisi (gelistirici araci)
 ├─ ui/            DOM ekranlari (menu, magaza, skor, sonuc)
 └─ app.ts         girdi + oyun dongusu
 scripts/          harita dogrulama ve denge simulasyonu araclari
 ```
 
+### Grafikler ve animasyon
+Oyunda **hazir gorsel dosyasi yoktur**; her sey Canvas 2D ile prosedurel cizilir:
+
+- `render/models.ts` — her sampiyonun "modeli": govde/aksan/ten/sac renkleri,
+  silah tipi (buyuk kilic, balta, yay, asa, hancer, mizrak...), baslik
+  (kukuleta, migfer, boynuz, tac, maske), yapi (agir/orta/ince), pelerin, aura.
+- `render/sprites.ts` — tepeden gorunum karakter cizimi: golge, bacaklar,
+  pelerin, govde, omuzluklar, kollar, silah ve en ustte bas ayri ayri cizilir.
+  Ayni dosyada minyon, kule, engelleyici, ana bina ve orman canavari cizimleri
+  de bulunur.
+- **Animasyon durumlari:** duruş (nefes), yuruyus (bacak + govde dongusu),
+  saldiri hazirligi (silah geri cekilir / yay gerilir), vurus (savurma),
+  yetenek kullanma (kollar yukari + dalga), hasar parlamasi, olum.
+  Durumlar `Unit.tickAnim()` icinde tutulan `walkPhase / swing / windup /
+  hitFlash` alanlarindan turetilir.
+- **Kuleler** hedeflerine donen taret basina, hasar aldikca catlaklara ve
+  ates ederken geri tepmeye sahiptir; ana bina donen kristal ve yorunge
+  parcalariyla cizilir.
+- Menu kartlarindaki ve HUD'daki portreler ayni sprite'tan uretilir
+  (`render/portrait.ts`), boylece secim ekrani ile oyun ici gorunum birebir ayni olur.
+
+Tum sprite'lari poz poz gormek icin gelistirici sayfasi:
+`npm run dev` → <http://localhost:5173/sprites.html>
+
 ### Tasarim notlari
-- **Tek dosyalik varlik yok:** tum grafikler Canvas 2D ile prosedurel cizilir,
-  sampiyonlar emoji + gradyan daire olarak temsil edilir.
+- **Tek dosyalik varlik yok:** tum grafikler ve sesler calisma aninda uretilir
+  (Canvas 2D + WebAudio), bu yuzden uygulama paketi cok kucuktur.
 - **Harita simetrisi:** koridorlar iki takim icin ayni fiziksel yoldur; kirmizi
   takim ters yonde yurur. Nokta-simetri ust/alt koridoru yer degistirdigi icin
   yapi konumlari aynalanirken koridor etiketi de degisir (`swapLane`).

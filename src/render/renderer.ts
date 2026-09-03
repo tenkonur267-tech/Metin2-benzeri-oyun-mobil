@@ -4,11 +4,39 @@ import type { Champion } from "../game/champion";
 import type { World } from "../game/world";
 import type { Minion, Monster, Structure, Unit } from "../game/units";
 import { buildMapCanvas, roundRect } from "./mapCanvas";
+import { championModel, creatureModel } from "./models";
+import {
+  drawCharacter,
+  drawCreature,
+  drawInhibitorSprite,
+  drawMinionSprite,
+  drawNexusSprite,
+  drawTowerSprite,
+  type AnimState,
+} from "./sprites";
 
 export interface Camera {
   x: number;
   y: number;
   scale: number;
+}
+
+
+/** Bir birimden cizim animasyon durumu uretir. */
+export function unitAnim(u: Unit, time: number): AnimState {
+  const windupTotal = Math.max(0.05, Math.min(0.28, u.attackInterval * 0.32));
+  const cast = (u as unknown as { castAnim?: number }).castAnim ?? 0;
+  return {
+    facing: u.facing,
+    walkPhase: u.walkPhase,
+    moving: u.speedNow > 12,
+    swing: clamp(u.swing / 0.24, 0, 1),
+    windup: u.windupTarget ? clamp(u.windup / windupTotal, 0, 1) : 0,
+    cast: clamp(cast / 0.3, 0, 1),
+    flash: clamp(u.hitFlash / 0.12, 0, 1),
+    time,
+    hp: u.hpPct,
+  };
 }
 
 export class Renderer {
@@ -197,79 +225,47 @@ export class Renderer {
         this.drawRubble(g, s);
         continue;
       }
-      if (!this.visible(s.pos, 80)) continue;
+      if (!this.visible(s.pos, 90)) continue;
       const col = TEAM_COLORS[s.team];
       const dark = TEAM_COLORS_DARK[s.team];
-      g.save();
-      g.translate(s.pos.x, s.pos.y);
-
-      // Golge
-      g.fillStyle = "rgba(0,0,0,0.35)";
-      g.beginPath();
-      g.ellipse(0, s.radius * 0.5, s.radius * 1.1, s.radius * 0.45, 0, 0, Math.PI * 2);
-      g.fill();
 
       if (s.kind === "tower") {
-        g.fillStyle = dark;
-        roundRect(g, -s.radius * 0.62, -s.radius * 1.6, s.radius * 1.24, s.radius * 2.1, 4);
-        g.fill();
-        g.strokeStyle = col;
-        g.lineWidth = 2;
-        g.stroke();
-        g.fillStyle = col;
-        g.beginPath();
-        g.arc(0, -s.radius * 1.7, s.radius * 0.5, 0, Math.PI * 2);
-        g.fill();
-        g.globalAlpha = 0.35 + 0.25 * Math.sin(world.time * 4 + s.id);
-        g.beginPath();
-        g.arc(0, -s.radius * 1.7, s.radius * 0.85, 0, Math.PI * 2);
-        g.fill();
-        g.globalAlpha = 1;
+        const t = s.target;
+        const aim = t
+          ? Math.atan2(t.pos.y - s.pos.y, t.pos.x - s.pos.x)
+          : Math.sin(world.time * 0.4 + s.id) * 0.8;
+        drawTowerSprite(
+          g,
+          s.pos.x,
+          s.pos.y,
+          s.radius,
+          col,
+          dark,
+          world.time,
+          aim,
+          s.hpPct,
+          clamp(s.swing / 0.24, 0, 1),
+          s.tier,
+        );
       } else if (s.kind === "inhibitor") {
-        g.fillStyle = dark;
-        g.beginPath();
-        g.moveTo(0, -s.radius * 1.4);
-        g.lineTo(s.radius, 0);
-        g.lineTo(0, s.radius * 1.1);
-        g.lineTo(-s.radius, 0);
-        g.closePath();
-        g.fill();
-        g.strokeStyle = col;
-        g.lineWidth = 2.5;
-        g.stroke();
+        drawInhibitorSprite(g, s.pos.x, s.pos.y, s.radius, col, dark, world.time);
       } else {
-        const pulse = 1 + 0.06 * Math.sin(world.time * 2.4);
-        g.fillStyle = dark;
-        g.beginPath();
-        g.arc(0, 0, s.radius * pulse, 0, Math.PI * 2);
-        g.fill();
-        g.strokeStyle = col;
-        g.lineWidth = 3;
-        g.stroke();
-        g.globalAlpha = 0.5;
-        g.fillStyle = col;
-        g.beginPath();
-        g.arc(0, 0, s.radius * 0.55 * pulse, 0, Math.PI * 2);
-        g.fill();
-        g.globalAlpha = 1;
+        drawNexusSprite(g, s.pos.x, s.pos.y, s.radius, col, dark, world.time, s.hpPct);
       }
 
       const nearPlayer =
         Math.hypot(world.player.pos.x - s.pos.x, world.player.pos.y - s.pos.y) < 300;
       if (s.invulnerable && nearPlayer) {
+        g.save();
         g.globalAlpha = 0.5;
         g.strokeStyle = "#dfe9f5";
         g.lineWidth = 2;
         g.setLineDash([5, 5]);
         g.beginPath();
-        g.arc(0, 0, s.radius * 1.5, 0, Math.PI * 2);
+        g.arc(s.pos.x, s.pos.y, s.radius * 1.6, 0, Math.PI * 2);
         g.stroke();
-        g.setLineDash([]);
-        g.globalAlpha = 1;
+        g.restore();
       }
-      g.restore();
-
-
     }
   }
 
@@ -296,64 +292,30 @@ export class Renderer {
     for (const m of world.minions) {
       if (!m.alive || !this.visible(m.pos, 30)) continue;
       if (m.team !== p.team && !m.visibleTo[p.team]) continue;
-      const col = TEAM_COLORS[m.team];
-      const dark = TEAM_COLORS_DARK[m.team];
-      g.save();
-      g.translate(m.pos.x, m.pos.y);
-      g.fillStyle = "rgba(0,0,0,0.3)";
-      g.beginPath();
-      g.ellipse(0, m.radius * 0.55, m.radius * 0.85, m.radius * 0.35, 0, 0, Math.PI * 2);
-      g.fill();
-
-      g.fillStyle = dark;
-      g.beginPath();
-      g.arc(0, 0, m.radius, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = col;
-      g.lineWidth = 1.6;
-      g.stroke();
-
-      // Tur isareti
-      g.fillStyle = col;
-      if (m.minionKind === "caster") {
-        g.beginPath();
-        g.arc(0, -1, m.radius * 0.42, 0, Math.PI * 2);
-        g.fill();
-      } else if (m.minionKind === "cannon" || m.minionKind === "super") {
-        g.fillRect(-m.radius * 0.42, -m.radius * 0.42, m.radius * 0.84, m.radius * 0.84);
-      } else {
-        g.beginPath();
-        g.moveTo(0, -m.radius * 0.5);
-        g.lineTo(m.radius * 0.45, m.radius * 0.4);
-        g.lineTo(-m.radius * 0.45, m.radius * 0.4);
-        g.closePath();
-        g.fill();
-      }
-      g.restore();
+      drawMinionSprite(
+        g,
+        m.pos.x,
+        m.pos.y,
+        m.radius * 1.35,
+        m.minionKind,
+        TEAM_COLORS[m.team],
+        TEAM_COLORS_DARK[m.team],
+        unitAnim(m, world.time),
+      );
     }
   }
 
   private drawMonsters(g: CanvasRenderingContext2D, world: World): void {
     for (const m of world.monsters) {
-      if (!m.alive || !this.visible(m.pos, 60)) continue;
-      g.save();
-      g.translate(m.pos.x, m.pos.y);
-      g.fillStyle = "rgba(0,0,0,0.35)";
-      g.beginPath();
-      g.ellipse(0, m.radius * 0.5, m.radius, m.radius * 0.4, 0, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#2f3d2a";
-      g.beginPath();
-      g.arc(0, 0, m.radius, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = m.spec.epic ? "#c9a0ff" : "#8fa46a";
-      g.lineWidth = 2.5;
-      g.stroke();
-      g.font = `${m.radius * 1.4}px serif`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(m.spec.emoji, 0, 1);
-      g.restore();
+      if (!m.alive || !this.visible(m.pos, 70)) continue;
+      drawCreature(
+        g,
+        m.pos.x,
+        m.pos.y,
+        m.radius * 1.15,
+        creatureModel(m.spec.name),
+        unitAnim(m, world.time),
+      );
     }
   }
 
@@ -367,77 +329,73 @@ export class Renderer {
       const col = c.def.color;
       const teamCol = TEAM_COLORS[c.team];
       const stealth = c.hasEffect("stealth");
+
+      g.save();
+      if (stealth) g.globalAlpha = 0.42;
+
+      // Takim halkasi (zeminde)
       g.save();
       g.translate(c.pos.x, c.pos.y);
-      if (stealth) g.globalAlpha = 0.45;
-
-      // Golge
-      g.fillStyle = "rgba(0,0,0,0.4)";
-      g.beginPath();
-      g.ellipse(0, c.radius * 0.6, c.radius * 1.05, c.radius * 0.42, 0, 0, Math.PI * 2);
-      g.fill();
-
-      // Takim halkasi
       g.strokeStyle = teamCol;
-      g.lineWidth = 2.5;
+      g.lineWidth = 2.2;
+      g.globalAlpha *= 0.85;
       g.beginPath();
-      g.arc(0, 0, c.radius + 3, 0, Math.PI * 2);
+      g.ellipse(0, c.radius * 0.5, c.radius * 1.1, c.radius * 0.46, 0, 0, Math.PI * 2);
       g.stroke();
+      g.restore();
+
+      drawCharacter(
+        g,
+        c.pos.x,
+        c.pos.y,
+        c.radius * 1.35,
+        championModel(c.def.id),
+        teamCol,
+        unitAnim(c, world.time),
+      );
+
+      // Oyuncu isareti
       if (c.isPlayer) {
+        g.save();
+        g.translate(c.pos.x, c.pos.y);
         g.strokeStyle = "#ffe08a";
         g.lineWidth = 2;
         g.setLineDash([6, 5]);
+        g.lineDashOffset = -world.time * 12;
         g.beginPath();
-        g.arc(0, 0, c.radius + 8, 0, Math.PI * 2);
+        g.ellipse(0, c.radius * 0.5, c.radius * 1.5, c.radius * 0.62, 0, 0, Math.PI * 2);
         g.stroke();
-        g.setLineDash([]);
+        g.restore();
       }
 
-      // Govde
-      const bodyGrad = g.createRadialGradient(-c.radius * 0.3, -c.radius * 0.4, 2, 0, 0, c.radius);
-      bodyGrad.addColorStop(0, "#ffffff");
-      bodyGrad.addColorStop(0.25, col);
-      bodyGrad.addColorStop(1, shade(col, -0.45));
-      g.fillStyle = bodyGrad;
-      g.beginPath();
-      g.arc(0, 0, c.radius, 0, Math.PI * 2);
-      g.fill();
-
-      // Yon gostergesi
-      g.fillStyle = "rgba(255,255,255,0.85)";
-      g.beginPath();
-      g.moveTo(Math.cos(c.facing) * (c.radius + 6), Math.sin(c.facing) * (c.radius + 6));
-      g.lineTo(Math.cos(c.facing + 2.4) * c.radius * 0.7, Math.sin(c.facing + 2.4) * c.radius * 0.7);
-      g.lineTo(Math.cos(c.facing - 2.4) * c.radius * 0.7, Math.sin(c.facing - 2.4) * c.radius * 0.7);
-      g.closePath();
-      g.fill();
-
-      // Emoji
-      g.font = `${c.radius * 1.25}px serif`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(c.def.emoji, 0, 1);
-
-      // Kalkan
+      // Kalkan kubbesi
       const sh = c.shieldAmount;
       if (sh > 0) {
+        g.save();
+        g.translate(c.pos.x, c.pos.y);
+        g.globalAlpha = 0.55;
         g.strokeStyle = "#8fd8ff";
-        g.globalAlpha = 0.8;
-        g.lineWidth = 3;
+        g.lineWidth = 2.5;
         g.beginPath();
-        g.arc(0, 0, c.radius + 6, 0, Math.PI * 2);
+        g.arc(0, 0, c.radius * 1.5, 0, Math.PI * 2);
         g.stroke();
-        g.globalAlpha = 1;
+        g.globalAlpha = 0.12;
+        g.fillStyle = "#8fd8ff";
+        g.fill();
+        g.restore();
       }
-      // Yetenek animasyonu
+
+      // Yetenek kullanma dalgasi
       if (c.castAnim > 0) {
+        g.save();
+        g.translate(c.pos.x, c.pos.y);
         g.globalAlpha = c.castAnim / 0.3;
         g.strokeStyle = col;
         g.lineWidth = 3;
         g.beginPath();
-        g.arc(0, 0, c.radius + 10 + (1 - c.castAnim / 0.3) * 16, 0, Math.PI * 2);
+        g.arc(0, 0, c.radius * 1.4 + (1 - c.castAnim / 0.3) * 20, 0, Math.PI * 2);
         g.stroke();
-        g.globalAlpha = 1;
+        g.restore();
       }
       g.restore();
 
