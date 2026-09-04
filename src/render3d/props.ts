@@ -51,6 +51,17 @@ export class PropLibrary {
     return this.get(name).size.y || 1;
   }
 
+  /**
+   * Modelin yatay yaricapi, verilen yukseklige olceklendiginde.
+   * Kayalari gecilmez sinirin tam disina dizmek icin kullanilir.
+   */
+  footprint(name: string, targetHeight: number): number {
+    const p = this.get(name);
+    const k = targetHeight / (p.size.y || 1);
+    // Modeller rastgele donduruldugu icin en genis hal olan kosegen alinir.
+    return (Math.hypot(p.size.x, p.size.z) / 2) * k;
+  }
+
   /** Modelin paylasilan materyalini bir renge dogru kaydirir. */
   tint(name: string, hex: number, amount = 0.5): void {
     const col = new THREE.Color(hex);
@@ -99,6 +110,7 @@ export class PropLibrary {
     const p = this.get(name);
     return p.parts.map((part) => {
       const im = new THREE.InstancedMesh(part.geometry, part.material, Math.max(1, count));
+      im.name = name;
       im.castShadow = true;
       im.receiveShadow = false;
       im.count = 0;

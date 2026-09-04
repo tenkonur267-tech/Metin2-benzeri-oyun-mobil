@@ -17,6 +17,7 @@ export default defineConfig({
         main: "index.html",
         props: "props.html",
         map: "map.html",
+        border: "border.html",
       },
     },
   },

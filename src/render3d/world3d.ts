@@ -15,6 +15,7 @@ import {
   PROP_NAMES,
   applyVisionToProps,
   buildTerrain,
+  fowTime,
   terrainHeight,
   type TerrainBuild,
 } from "./terrain";
@@ -210,7 +211,11 @@ export class World3D {
       this.structures.get(s.id)?.update(this.time);
     }
     this.minions.update(world.minions, team, dt);
-    if (this.terrain) this.terrain.water.uniforms.uTime.value = this.time;
+    if (this.terrain) {
+      this.terrain.water.uniforms.uTime.value = this.time;
+      this.terrain.mist.uniforms.uTime.value = this.time;
+    }
+    fowTime.value = this.time;
     // Vurus sarsintisini oyun katmanindan al
     this.stage.shake = world.fx.shake;
     this.stage.tickShake(dt);

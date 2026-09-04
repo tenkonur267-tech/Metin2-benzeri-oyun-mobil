@@ -10,7 +10,7 @@
 import * as THREE from "three";
 import { BASE_PROPS, STRUCTURE_PROPS } from "../render3d/actors";
 import { PropLibrary } from "../render3d/props";
-import { PROP_NAMES, buildTerrain, terrainHeight } from "../render3d/terrain";
+import { PROP_NAMES, buildTerrain, fowTime, terrainHeight } from "../render3d/terrain";
 import { MAP_SIZE } from "../game/constants";
 
 const q = new URLSearchParams(location.search);
@@ -65,7 +65,10 @@ async function main(): Promise<void> {
   let frames = 0;
   let last = t0;
   const tick = (): void => {
-    terrain.water.uniforms.uTime.value = (performance.now() - t0) / 1000;
+    const t = (performance.now() - t0) / 1000;
+    terrain.water.uniforms.uTime.value = t;
+    terrain.mist.uniforms.uTime.value = t;
+    fowTime.value = t;
     renderer.render(scene, camera);
     const now = performance.now();
     frames++;

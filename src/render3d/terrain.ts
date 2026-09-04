@@ -182,6 +182,7 @@ export interface TerrainBuild {
   ground: THREE.Mesh;
   /** Nehir materyali; her karede `uTime` guncellenir. */
   water: THREE.ShaderMaterial;
+  mist: THREE.ShaderMaterial;
   /** Hazir modellerden olusan dekor (savas sisi ayrica uygulanir). */
   decor: THREE.Group;
   visionTexture: THREE.DataTexture;
@@ -320,6 +321,9 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   for (const name of STONE_MODELS) {
     if (props.has(name)) props.recolor(name, STONE_PALETTE);
   }
+  const mist = buildMist();
+  group.add(mist.mesh);
+
   const decor = new THREE.Group();
   decor.add(buildJungleWalls(props, rng));
   decor.add(buildBorderWall(props, rng));
@@ -329,7 +333,11 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   decor.add(buildBases(props, rng));
   group.add(decor);
 
-  return { group, ground, decor, water: waterMat, visionTexture, visionData, visionSize: VISION_SIZE };
+  return {
+    group, ground, decor,
+    water: waterMat, mist: mist.material,
+    visionTexture, visionData, visionSize: VISION_SIZE,
+  };
 }
 
 /**
@@ -339,6 +347,92 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
  * kenarlarda kopuk seridi ve derinlige gore koyulasan turkuaz bir renk.
  * Zemin altta gorunmeye devam etsin diye yari saydamdir.
  */
+/**
+ * Orman sisi.
+ *
+ * Koridorlardan ve uslerden uzakta, zemine yakin suzulen ince bir sis
+ * tabakasi. Yogunlugu CPU'da her koseye yazilir (koridorda 0, ormanin
+ * icinde 1); kayma ve kabarma shader'da yapilir.
+ */
+function buildMist(): { mesh: THREE.Mesh; material: THREE.ShaderMaterial } {
+  const SEG = 110;
+  const geo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, SEG, SEG);
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(MAP_SIZE / 2, 0, MAP_SIZE / 2);
+
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const amount = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    // Koridorlarda ve nehirde acilir, ormanda yogunlasir
+    let a = smooth(LANE_HALF * 1.15, LANE_FADE * 1.5, laneDist(x, z));
+    a *= smooth(RIVER_HALF * 0.9, RIVER_FADE * 1.2, riverDist(x, z));
+    for (const team of [0, 1] as const) {
+      const n = NEXUS_POS[team];
+      a *= smooth(BASE_R * 0.8, BASE_R * 1.35, Math.hypot(x - n.x, z - n.y));
+    }
+    // Duvarlarin tepesinde sis birikmez
+    a *= 1 - smooth(0, WALL_SLOPE, wallDepth(x, z));
+    amount[i] = a;
+    pos.setY(i, terrainHeight(x, z) + 6);
+  }
+  geo.setAttribute("aMist", new THREE.BufferAttribute(amount, 1));
+  geo.computeVertexNormals();
+
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color(0xb6cbdb) },
+    },
+    vertexShader: `
+      attribute float aMist;
+      varying float vMist;
+      varying vec3 vWorld;
+      void main() {
+        vMist = aMist;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform vec3 uColor;
+      varying float vMist;
+      varying vec3 vWorld;
+
+      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n2(vec2 p) {
+        vec2 i = floor(p); vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1.0, 0.0)), u.x),
+                   mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
+
+      void main() {
+        if (vMist < 0.01) discard;
+        vec2 p = vWorld.xz;
+        // Iki yonde kayan bulut katmani
+        float a = n2(p * 0.010 + vec2(uTime * 0.013, uTime * 0.008));
+        float b = n2(p * 0.026 - vec2(uTime * 0.021, uTime * 0.011));
+        float f = a * 0.65 + b * 0.35;
+        f = smoothstep(0.24, 0.78, f);
+        float alpha = vMist * f * 0.52;
+        if (alpha < 0.004) discard;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+  });
+
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.renderOrder = 2;
+  mesh.frustumCulled = false;
+  return { mesh, material };
+}
+
 export function makeWaterMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
@@ -422,6 +516,40 @@ function texBase(): string {
   return b.endsWith("/") ? b : `${b}/`;
 }
 
+/**
+ * Savas sisi zamani.
+ *
+ * Sisin suzulmesi icin zemin ve model materyalleri ayni uniform'u
+ * paylasir; her karede `world3d` bir kez gunceller.
+ */
+export const fowTime = { value: 0 };
+
+/** Savas sisi: gorulmeyen yerler karartilmaz, sisle ortulur. */
+const FOW_GLSL = `
+float fowHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float fowNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(fowHash(i), fowHash(i + vec2(1.0, 0.0)), u.x),
+    mix(fowHash(i + vec2(0.0, 1.0)), fowHash(i + vec2(1.0, 1.0)), u.x),
+    u.y);
+}
+vec3 applyFow(vec3 col, float vis, vec2 world, float t) {
+  float hidden = 1.0 - clamp(vis, 0.0, 1.0);
+  // Iki katman suzulen sis: yogunlugu yavasca degisir
+  float n = fowNoise(world * 0.012 + vec2(t * 0.011, t * -0.007)) * 0.6
+          + fowNoise(world * 0.031 - vec2(t * 0.017, t * 0.013)) * 0.4;
+  vec3 mist = vec3(0.34, 0.42, 0.52) * (0.72 + 0.55 * n);
+  // Once biraz karartir, sonra sisle kaplar
+  vec3 dark = col * mix(1.0, 0.42, hidden);
+  return mix(dark, mist, hidden * 0.74);
+}
+`;
+
 export function makeGroundMaterial(vision: THREE.Texture): THREE.Material {
   const base = texBase();
   const grass = loadTiling(`${base}textures/grass.webp`);
@@ -435,6 +563,7 @@ export function makeGroundMaterial(vision: THREE.Texture): THREE.Material {
     shader.uniforms.uRock = { value: rock };
     shader.uniforms.uVision = { value: vision };
     shader.uniforms.uMapSize = { value: MAP_SIZE };
+    shader.uniforms.uTime = fowTime;
 
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -461,7 +590,9 @@ uniform sampler2D uGrass;
 uniform sampler2D uDirt;
 uniform sampler2D uRock;
 uniform sampler2D uVision;
-uniform float uMapSize;`,
+uniform float uMapSize;
+uniform float uTime;
+${FOW_GLSL}`,
       )
       .replace(
         "#include <dithering_fragment>",
@@ -477,7 +608,7 @@ uniform float uMapSize;`,
   gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * tex * 2.2, 0.3);
 
   float vis = texture2D(uVision, vWorldPos.xz / uMapSize).r;
-  gl_FragColor.rgb *= mix(0.3, 1.0, clamp(vis, 0.0, 1.0));
+  gl_FragColor.rgb = applyFow(gl_FragColor.rgb, vis, vWorldPos.xz, uTime);
 }`,
       );
   };
@@ -499,6 +630,7 @@ export function applyVisionToProps(root: THREE.Object3D, vision: THREE.Texture):
         prev?.call(mat, shader, renderer);
         shader.uniforms.uVision = { value: vision };
         shader.uniforms.uMapSize = { value: MAP_SIZE };
+        shader.uniforms.uTime = fowTime;
         shader.vertexShader = shader.vertexShader
           .replace("#include <common>", "#include <common>\nvarying vec3 vWorldPosFow;")
           .replace(
@@ -511,14 +643,16 @@ export function applyVisionToProps(root: THREE.Object3D, vision: THREE.Texture):
             `#include <common>
 varying vec3 vWorldPosFow;
 uniform sampler2D uVision;
-uniform float uMapSize;`,
+uniform float uMapSize;
+uniform float uTime;
+${FOW_GLSL}`,
           )
           .replace(
             "#include <dithering_fragment>",
             `#include <dithering_fragment>
 {
   float vis = texture2D(uVision, vWorldPosFow.xz / uMapSize).r;
-  gl_FragColor.rgb *= mix(0.32, 1.0, clamp(vis, 0.0, 1.0));
+  gl_FragColor.rgb = applyFow(gl_FragColor.rgb, vis, vWorldPosFow.xz, uTime);
 }`,
           );
       };
@@ -609,11 +743,14 @@ const BUSHES_MODELS = ["nat-bush-a", "nat-bush-b", "nat-bush-c"];
 const GRASS_MODELS = ["nat-grass-a", "nat-grass-b"];
 const ROCKS = ["rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e", "nat-rock-a", "nat-rock-b"];
 const MOUNTAINS = ["mountain-a", "mountain-b", "mountain-c"];
-/** Duvar eteklerini olusturan kaya bloklari. */
-const CLIFF_BLOCKS = [
-  "mountain-a", "mountain-b", "mountain-c",
-  "rock-single-a", "rock-single-c", "rock-single-e",
-];
+/**
+ * Duvar eteklerini olusturan kaya bloklari.
+ *
+ * Sadece kabaca kup oranli dag modelleri kullanilir; `rock-single-a`
+ * gibi yassi ve cok genis kayalar istenen yuksekluge olceklendiginde
+ * dev bir levha gibi yayiliyor ve gecilmez sinirin icine tasiyordu.
+ */
+const CLIFF_BLOCKS = ["mountain-a", "mountain-b", "mountain-c"];
 const WATERPLANTS = ["waterplant-a", "waterplant-b"];
 
 /** Modeli istenen yukseklige olceklendirip yerlesim kaydi olusturur. */
@@ -723,22 +860,37 @@ function buildBorderWall(props: PropLibrary, rng: Rng): THREE.Group {
   };
 
   // Ic etek: oyun alanina bakan kesintisiz kaya sirti.
-  // Kayalarin ic yuzu, yurumenin durdugu `BORDER` cizgisiyle ayni hizada.
-  for (const p of ring(BORDER + 14, 20, 3)) {
-    list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(26, 36), rng.range(0, Math.PI * 2)));
+  //
+  // Her kaya, kendi genisligi kadar disari itilir; boylece kayanin ic
+  // yuzu yurumenin durdugu `BORDER` cizgisiyle cakisir ve karakter
+  // kayanin icine girmis gibi gorunmez.
+  for (const p of ring(BORDER, 20, 0)) {
+    const model = rng.pick(CLIFF_BLOCKS);
+    const h = rng.range(26, 36);
+    const push = props.footprint(model, h);
+    // Kenardan uzaklasmak = harita disina dogru gitmek
+    const ox = p.x < MAP_SIZE / 2 ? -push : p.x > MAP_SIZE / 2 ? push : 0;
+    const oy = p.y < MAP_SIZE / 2 ? -push : p.y > MAP_SIZE / 2 ? push : 0;
+    const onX = Math.min(p.x, MAP_SIZE - p.x) < Math.min(p.y, MAP_SIZE - p.y);
+    list.push(place(
+      props, model,
+      p.x + (onX ? ox : 0),
+      p.y + (onX ? 0 : oy),
+      h, rng.range(0, Math.PI * 2),
+    ));
   }
   // Sirtin uzerinde ve arkasinda koyu ignelik orman
-  for (const p of ring(BORDER * 0.62, 26, 8)) {
-    list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(52, 72), rng.range(0, Math.PI * 2)));
+  for (const p of ring(BORDER * 0.28, 26, 6)) {
+    list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(44, 58), rng.range(0, Math.PI * 2)));
   }
-  for (const p of ring(BORDER * 0.3, 30, 10)) {
-    if (rng.chance(0.75)) {
-      list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(46, 66), rng.range(0, Math.PI * 2)));
+  for (const p of ring(BORDER * 0.02, 30, 8)) {
+    if (rng.chance(0.8)) {
+      list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(42, 56), rng.range(0, Math.PI * 2)));
     }
   }
   // En distaki kayalar siluetı kapatir
-  for (const p of ring(BORDER * 0.08, 28, 8)) {
-    list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(28, 44), rng.range(0, Math.PI * 2)));
+  for (const p of ring(-6, 28, 6)) {
+    list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(30, 46), rng.range(0, Math.PI * 2)));
   }
   return instancePlacements(props, list);
 }
