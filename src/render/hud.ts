@@ -18,7 +18,7 @@ export interface View {
 }
 
 export type AbilityKey = "Q" | "W" | "E" | "R";
-export type AimKey = AbilityKey | "D" | "F";
+export type AimKey = AbilityKey | "D" | "F" | "A";
 
 export interface UiState {
   joystick: { active: boolean; id: number; base: Vec2; cur: Vec2 };
@@ -748,9 +748,11 @@ export function aimTarget(
 ): { point: Vec2; target: import("../game/units").Unit | null } | null {
   const key = ui.aim.key;
   if (!key) return null;
-  const def = key === "D" || key === "F" ? null : p.def.abilities.find((a) => a.key === key)!;
-  const range = def?.range || 120;
-  const style = def?.targeting ?? "point";
+  const isAttack = key === "A";
+  const def =
+    key === "D" || key === "F" || isAttack ? null : p.def.abilities.find((a) => a.key === key)!;
+  const range = isAttack ? p.stats.attackRange + 150 : def?.range || 120;
+  const style = isAttack ? "unit" : def?.targeting ?? "point";
 
   const dx = ui.aim.cur.x - ui.aim.origin.x;
   const dy = ui.aim.cur.y - ui.aim.origin.y;

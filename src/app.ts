@@ -230,6 +230,8 @@ export class App {
     if (inCircle(L.attack, p.x, p.y, 6)) {
       this.attackHeld = true;
       this.attackPointer = e.pointerId;
+      // Basili tutup kaydirinca hedef secilebilsin.
+      ui.aim = { key: "A", id: e.pointerId, origin: { ...p }, cur: { ...p }, moved: 0 };
       this.pickForcedTarget();
       return;
     }
@@ -315,6 +317,11 @@ export class App {
     if (!p.alive) return;
     const info = aimTarget(world, this.layout, this.ui, p);
     if (!info) return;
+    if (key === "A") {
+      // Saldiri tusu: yetenek atmaz, sadece hedefi kilitler.
+      if (info.target) this.forcedTarget = info.target;
+      return;
+    }
     const aim: AimInput = {
       point: info.point,
       dir: norm({ x: info.point.x - p.pos.x, y: info.point.y - p.pos.y }),
@@ -365,7 +372,9 @@ export class App {
           ? this.layout.summoners[0]
           : ak === "F"
             ? this.layout.summoners[1]
-            : this.layout.abilities[ak];
+            : ak === "A"
+              ? this.layout.attack
+              : this.layout.abilities[ak];
       this.ui.aim = {
         key: ak,
         id: -2,
@@ -483,7 +492,14 @@ export class App {
     let range = 175;
     let width = 55;
     let color = 0x8fd8ff;
-    if (key === "D" || key === "F") {
+    if (key === "A") {
+      // Suruklerken hedef onizlemesi canli guncellensin.
+      if (info.target) this.forcedTarget = info.target;
+      shape = "unit";
+      range = p.stats.attackRange + 150;
+      width = 30;
+      color = 0xffd27a;
+    } else if (key === "D" || key === "F") {
       shape = "circle";
       range = 120;
       width = 26;

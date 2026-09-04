@@ -63,6 +63,9 @@ export const KAYKIT_HEIGHT = 1.75;
 /** Sampiyon boyu = yaricap x bu carpan (oyun birimi). */
 const CHAMPION_HEIGHT = 2.55;
 
+/** Yetenek animasyonunun suresi (saniye) — kisa tutulur ki kombo akici olsun. */
+const ABILITY_ANIM_TIME = 0.5;
+
 /**
  * Hazir bir silahi el kemigine takar.
  *
@@ -253,7 +256,7 @@ export class ChampionActor {
     const a = this.actions.get(name);
     if (!a) return 0;
     const len = this.clipLength.get(name) ?? 1;
-    const speed = duration && duration > 0.05 ? clamp(len / duration, 0.5, 3.2) : 1.5;
+    const speed = duration && duration > 0.05 ? clamp(len / duration, 0.5, 4.5) : 1.5;
     const prev = this.actions.get(this.current);
     if (prev && prev !== a) prev.fadeOut(0.1);
     a.reset();
@@ -291,8 +294,10 @@ export class ChampionActor {
         // Yetenege ozel klip varsa o, yoksa genel buyu animasyonu
         const key = c.castAnimKey as AnimName;
         const state: AnimName = this.actions.has(key) ? key : "Cast";
-        // Klip uzun olsa da baska bir yetenek kisa surede devralabilmeli
-        this.swingCooldown = Math.min(this.trigger(state), 0.45);
+        // Yetenekler aninda etki ettigi icin animasyon da tok ve kisa
+        // olmali; klip 2 saniye surse bile 0.5 saniyeye sigdirilir.
+        this.trigger(state, ABILITY_ANIM_TIME);
+        this.swingCooldown = ABILITY_ANIM_TIME * 0.6;
       } else if (c.swing > 0.1 && this.swingCooldown <= 0) {
         // Saldiri animasyonu saldiri hizina uydurulur
         // Hasar `windup` kadar sonra iniyor; klip temas anini oraya
