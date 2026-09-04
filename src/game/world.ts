@@ -487,6 +487,25 @@ export class World {
       c.addGold(spec.gold);
       c.gainXp(this, spec.xp);
       this.fx.goldNumber(mo.pos, spec.gold);
+      if (spec.buff) this.grantJungleBuff(c, spec.buff);
+    }
+  }
+
+  /**
+   * Orman buff kamplari (LoL'deki mavi/kizil buff karsiligi).
+   * Mavi: mana yenilenmesi ve bekleme suresi hissi icin hizlanma + iyilesme.
+   * Kizil: saldiri gucu ve can calma.
+   */
+  private grantJungleBuff(c: Champion, buff: "blue" | "red"): void {
+    const time = CONFIG.jungleBuffTime;
+    if (buff === "blue") {
+      c.addEffect({ id: "buffBlue", kind: "haste", time, value: 0.12, label: "💙", color: "#6fa8ff" });
+      c.addEffect({ id: "buffBlueHeal", kind: "heal", time, value: 6, label: "", color: "#6fa8ff" });
+      this.log(`${c.displayName()} Mavi Muhafiz buffini aldi`, "#6fa8ff");
+    } else {
+      c.addEffect({ id: "buffRed", kind: "adBuff", time, value: 14, label: "❤️", color: "#ff7a5c" });
+      c.addEffect({ id: "buffRedLs", kind: "lifestealBuff", time, value: 0.1, label: "", color: "#ff7a5c" });
+      this.log(`${c.displayName()} Kizil Yaban buffini aldi`, "#ff7a5c");
     }
   }
 

@@ -125,7 +125,13 @@ export class World3D {
       this.matchGroup.add(a.root);
     }
     for (const m of world.monsters) {
-      const file = m.spec.epic ? MONSTER_MODELS[0] : MONSTER_MODELS[(m.id % 2) + 1];
+      const file = m.spec.epic
+        ? MONSTER_MODELS[0]
+        : m.spec.buff === "blue"
+          ? MONSTER_MODELS[1]
+          : m.spec.buff === "red"
+            ? MONSTER_MODELS[0]
+            : MONSTER_MODELS[(m.id % 2) + 1];
       const model = this.characters.get(file) ?? this.characters.get(MONSTER_MODELS[0]);
       if (!model) continue;
       const a = new MonsterActor(m, model);

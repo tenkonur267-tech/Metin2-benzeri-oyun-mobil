@@ -181,10 +181,21 @@ export interface CampSpec {
   xp: number;
   respawn: number;
   epic?: "dragon" | "baron";
+  /** Olduruldugunde vurana gecici guclendirme verir. */
+  buff?: "blue" | "red";
   scale: number;
 }
 
+/**
+ * Orman kamplari League of Legends duzenine gore: her takimin yarisinda
+ * iki buff kampi (mavi/kizil) ve dort normal kamp bulunur. Buff kamplari
+ * olduruldugunde vurana gecici bir guclendirme verir.
+ */
 const BLUE_CAMPS: Omit<CampSpec, "id">[] = [
+  // Buff kamplari — LoL'deki Mavi Muhafiz ve Kizil Kabuklu karsiligi
+  { name: "Mavi Muhafiz", emoji: "💙", pos: { x: 320, y: 458 }, hp: 1500, ad: 44, armor: 22, gold: 90, xp: 130, respawn: 150, scale: 1.35, buff: "blue" },
+  { name: "Kizil Yaban", emoji: "❤️", pos: { x: 560, y: 740 }, hp: 1500, ad: 46, armor: 22, gold: 90, xp: 130, respawn: 150, scale: 1.35, buff: "red" },
+  // Normal kamplar
   { name: "Kurtlar", emoji: "🐺", pos: { x: 274, y: 589 }, hp: 900, ad: 32, armor: 12, gold: 68, xp: 90, respawn: 90, scale: 1 },
   { name: "Golem", emoji: "🪨", pos: { x: 271, y: 371 }, hp: 1250, ad: 40, armor: 20, gold: 82, xp: 110, respawn: 100, scale: 1.2 },
   { name: "Yirtici", emoji: "🦅", pos: { x: 451, y: 692 }, hp: 820, ad: 30, armor: 8, gold: 64, xp: 86, respawn: 90, scale: 0.9 },
@@ -249,7 +260,9 @@ export const CONFIG = {
   minionXp: 32,
   cannonXp: 62,
   /** Kule menzili ve hasari. */
-  towerRange: 172,
+  towerRange: 112,
+  /** Orman buff kamplarinin verdigi guclendirmenin suresi (saniye). */
+  jungleBuffTime: 90,
   towerAttackSpeed: 0.9,
   towerDamage: [155, 175, 195, 210],
   towerHp: [2200, 2500, 2800, 2300],

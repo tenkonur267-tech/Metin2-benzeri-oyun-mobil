@@ -525,15 +525,15 @@ function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
 
   for (const camp of CAMPS) {
-    const r = camp.epic ? 46 : 30;
-    const count = camp.epic ? 8 : 5;
+    const r = camp.epic ? 46 : camp.buff ? 38 : 30;
+    const count = camp.epic ? 8 : camp.buff ? 7 : 5;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2;
       list.push(place(
         props, ROCKS[i % ROCKS.length],
         camp.pos.x + Math.cos(a) * r,
         camp.pos.y + Math.sin(a) * r,
-        camp.epic ? 22 : 13,
+        camp.epic ? 22 : camp.buff ? 17 : 13,
         rng.range(0, Math.PI * 2),
       ));
     }
@@ -544,7 +544,15 @@ function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
     const m = new THREE.Mesh(
       geo,
       new THREE.MeshBasicMaterial({
-        color: camp.epic === "baron" ? 0xa87dff : camp.epic ? 0xff9b4a : 0x8fd06a,
+        color: camp.epic === "baron"
+          ? 0xa87dff
+          : camp.epic
+            ? 0xff9b4a
+            : camp.buff === "blue"
+              ? 0x5f9bff
+              : camp.buff === "red"
+                ? 0xff6a4a
+                : 0x8fd06a,
         transparent: true,
         opacity: 0.3,
         depthWrite: false,

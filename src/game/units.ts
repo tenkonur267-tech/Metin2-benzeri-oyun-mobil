@@ -434,7 +434,7 @@ export abstract class Unit {
   onHit(world: World, target: Unit, damage: number): void {}
 
   get isRanged(): boolean {
-    return this.stats.attackRange > 130;
+    return this.stats.attackRange > 60;
   }
 
   // -------------------------------------------------------------------------
@@ -463,11 +463,17 @@ export abstract class Unit {
 // Minyon
 // ---------------------------------------------------------------------------
 
+/**
+ * Menziller League of Legends'daki govde genisligi oranina gore ayarlandi:
+ * LoL'de yakin dovus minyonu hedefine ~1.7 govde genisligi kadar yaklasip
+ * vurur, buyucu ~6, kusatma ~3.6, super ~2.3. Burada minyon govdesi 14
+ * birim genisliginde oldugundan menziller ona gore olceklendi.
+ */
 const MINION_BASE: Record<MinionKind, { hp: number; ad: number; range: number; as: number; ms: number; armor: number; mr: number }> = {
-  melee: { hp: 480, ad: 13, range: 40, as: 1.25, ms: 60, armor: 2, mr: 0 },
-  caster: { hp: 300, ad: 24, range: 145, as: 1.0, ms: 60, armor: 0, mr: 12 },
-  cannon: { hp: 900, ad: 42, range: 165, as: 0.7, ms: 57, armor: 6, mr: 12 },
-  super: { hp: 1600, ad: 62, range: 50, as: 0.85, ms: 66, armor: 30, mr: 30 },
+  melee: { hp: 480, ad: 13, range: 10, as: 1.25, ms: 60, armor: 2, mr: 0 },
+  caster: { hp: 300, ad: 24, range: 78, as: 1.0, ms: 60, armor: 0, mr: 12 },
+  cannon: { hp: 900, ad: 42, range: 42, as: 0.7, ms: 57, armor: 6, mr: 12 },
+  super: { hp: 1600, ad: 62, range: 16, as: 0.85, ms: 66, armor: 30, mr: 30 },
 };
 
 export class Minion extends Unit {
@@ -685,7 +691,7 @@ export class Monster extends Unit {
       ad: spec.ad,
       armor: spec.armor,
       mr: spec.armor,
-      attackRange: spec.epic ? 120 : 60,
+      attackRange: spec.epic ? 28 : 14,
       attackSpeed: 0.75,
       moveSpeed: 78,
       sightRange: 240,
