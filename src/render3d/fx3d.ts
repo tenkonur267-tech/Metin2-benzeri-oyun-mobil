@@ -32,6 +32,12 @@ export class Fx3D {
   private geoRing: THREE.RingGeometry;
   private geoBeam = new THREE.CylinderGeometry(1, 1, 1, 5);
 
+  /**
+   * Parcacik boyutunu dunya biriminden piksele ceviren carpan.
+   * Her karede kamera ve tuval yuksekligine gore guncellenir.
+   */
+  private viewScale = { value: 600 };
+
   constructor() {
     this.geoDisc = new THREE.CircleGeometry(1, 28);
     this.geoDisc.rotateX(-Math.PI / 2);
@@ -47,14 +53,37 @@ export class Fx3D {
     g.setAttribute("color", new THREE.BufferAttribute(this.particleCol, 3));
     g.setAttribute("size", new THREE.BufferAttribute(this.particleSize, 1));
     g.setDrawRange(0, 0);
-    const pm = new THREE.PointsMaterial({
-      size: 4,
-      vertexColors: true,
+    // PointsMaterial parcacik basina boyutu yok sayar; hepsi tek bir
+    // uniform boyutta cizilir ve oyun kamerasindan bakinca 2-3 piksel
+    // kaliyordu, yani kivilcimlar goze carpmiyordu. Kendi shader'imiz
+    // `size` niteligini dunya birimi olarak kullanir.
+    const pm = new THREE.ShaderMaterial({
+      uniforms: { uScale: this.viewScale },
       transparent: true,
-      opacity: 0.95,
       depthWrite: false,
+      depthTest: true,
       blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
+      vertexShader: `
+        attribute float size;
+        attribute vec3 color;
+        uniform float uScale;
+        varying vec3 vCol;
+        void main() {
+          vCol = color;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = max(2.0, size * uScale / max(1.0, -mv.z));
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vCol;
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          float a = smoothstep(0.5, 0.08, d);
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(vCol, a);
+        }
+      `,
     });
     this.particles = new THREE.Points(g, pm);
     this.particles.frustumCulled = false;
@@ -85,6 +114,11 @@ export class Fx3D {
     if (m.geometry !== geo) m.geometry = geo;
     m.visible = true;
     return m;
+  }
+
+  /** Kamera ve tuval degistiginde parcacik olcegini tazeler. */
+  setViewScale(pixelHeight: number, fovDeg: number): void {
+    this.viewScale.value = pixelHeight / (2 * Math.tan((fovDeg * Math.PI) / 360));
   }
 
   update(world: World, time: number): void {
@@ -207,7 +241,7 @@ export class Fx3D {
       this.particleCol[i * 3] = col.r * life;
       this.particleCol[i * 3 + 1] = col.g * life;
       this.particleCol[i * 3 + 2] = col.b * life;
-      this.particleSize[i] = p.size * 2;
+      this.particleSize[i] = p.size * 3.2;
     }
     const g = this.particles.geometry;
     g.setDrawRange(0, n);

@@ -219,6 +219,10 @@ export class World3D {
     // Vurus sarsintisini oyun katmanindan al
     this.stage.shake = world.fx.shake;
     this.stage.tickShake(dt);
+    this.fx.setViewScale(
+      this.stage.renderer.domElement.height,
+      this.stage.camera.fov,
+    );
     this.fx.update(world, this.time);
 
     if (++this.visionFrame % 2 === 0) this.updateVision(world);
@@ -262,9 +266,10 @@ export class World3D {
     for (let i = 0; i < data.length; i++) {
       const cur = this.current[i];
       if (cur > this.explored[i]) this.explored[i] = cur;
-      // Kesfedilmis ama su an gorulmeyen yerler: arazi secilir, uzerinde
-      // ince sis kalir.
-      const v = Math.max(cur, this.explored[i] * 0.6);
+      // Kesfedilmis ama su an gorulmeyen yerler: League of Legends'da
+      // arazi net gorunur, yalniz birimler gizlenir. Bu yuzden burada da
+      // neredeyse tam acik birakilir; uzerinde yalniz ince bir sis kalir.
+      const v = Math.max(cur, this.explored[i] * 0.86);
       data[i] = Math.round(clamp(v, 0, 1) * 255);
     }
     t.visionTexture.needsUpdate = true;

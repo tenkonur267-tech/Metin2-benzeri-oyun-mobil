@@ -544,9 +544,11 @@ vec3 applyFow(vec3 col, float vis, vec2 world, float t) {
   float n = fowNoise(world * 0.012 + vec2(t * 0.011, t * -0.007)) * 0.6
           + fowNoise(world * 0.031 - vec2(t * 0.017, t * 0.013)) * 0.4;
   vec3 mist = vec3(0.34, 0.42, 0.52) * (0.72 + 0.55 * n);
-  // Once biraz karartir, sonra sisle kaplar
-  vec3 dark = col * mix(1.0, 0.42, hidden);
-  return mix(dark, mist, hidden * 0.74);
+  // Sis yalnizca hic gorulmemis bolgelerde yogunlasir; bir kez
+  // kesfedilen yer neredeyse tamamen acik kalir.
+  float thick = hidden * hidden;
+  vec3 dark = col * mix(1.0, 0.5, hidden);
+  return mix(dark, mist, thick * 0.92);
 }
 `;
 

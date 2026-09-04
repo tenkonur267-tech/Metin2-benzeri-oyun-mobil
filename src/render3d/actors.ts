@@ -388,6 +388,7 @@ class MinionActor {
   private body: THREE.Group;
   private mats: THREE.MeshStandardMaterial[] = [];
   private baseColors: THREE.Color[] = [];
+  private baseEmissive: number[] = [];
 
   constructor(model: LoadedModel, weapon: THREE.Object3D | null, height: number) {
     this.body = instantiate(model);
@@ -407,6 +408,7 @@ class MinionActor {
         if (std.color) {
           this.mats.push(std);
           this.baseColors.push(std.color.clone());
+          this.baseEmissive.push(std.emissive ? std.emissive.getHex() : 0);
         }
       }
     });
@@ -449,6 +451,18 @@ class MinionActor {
     else if (mi.speedNow > 6) this.play("Walking_A");
     else this.play("Idle");
     this.mixer.update(dt);
+    this.flash(mi.hitFlash);
+  }
+
+  /** Hasar alinca kisa bir beyaz parlama (vurusun hissedilmesi icin). */
+  private flash(hitFlash: number): void {
+    const f = clamp(hitFlash / 0.12, 0, 1);
+    for (let i = 0; i < this.mats.length; i++) {
+      const m = this.mats[i];
+      if (!m.emissive) continue;
+      if (f > 0.01) m.emissive.setRGB(f * 0.75, f * 0.7, f * 0.6);
+      else if (m.emissive.getHex() !== this.baseEmissive[i]) m.emissive.setHex(this.baseEmissive[i]);
+    }
   }
 }
 
@@ -519,6 +533,8 @@ export class MonsterActor {
   private current = "";
   private attackClip: string;
   private body: THREE.Group;
+  private mats: THREE.MeshStandardMaterial[] = [];
+  private baseEmissive: number[] = [];
 
   constructor(
     readonly monster: Monster,
@@ -541,6 +557,18 @@ export class MonsterActor {
     }
     mergeSkinned(this.body);
     this.root.add(this.body);
+
+    this.body.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mm of list) {
+        const std = mm as THREE.MeshStandardMaterial;
+        if (!std.emissive) continue;
+        this.mats.push(std);
+        this.baseEmissive.push(std.emissive.getHex());
+      }
+    });
 
     this.mixer = new THREE.AnimationMixer(this.body);
     for (const clip of model.animations) {
@@ -569,6 +597,14 @@ export class MonsterActor {
     else if (m.speedNow > 45) this.play("Running_A");
     else if (m.speedNow > 6) this.play("Walking_A");
     else this.play("Idle");
+
+    // Hasar alinca kisa beyaz parlama
+    const f = clamp(m.hitFlash / 0.12, 0, 1);
+    for (let i = 0; i < this.mats.length; i++) {
+      const mm = this.mats[i];
+      if (f > 0.01) mm.emissive.setRGB(f * 0.75, f * 0.7, f * 0.6);
+      else if (mm.emissive.getHex() !== this.baseEmissive[i]) mm.emissive.setHex(this.baseEmissive[i]);
+    }
     this.mixer.update(dt);
   }
 }

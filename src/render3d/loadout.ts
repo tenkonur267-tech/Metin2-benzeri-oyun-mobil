@@ -11,6 +11,8 @@
  * Hangi modelde hangi klibin bulundugu `scripts/fetch-assets.mjs`
  * icindeki KEEP_ANIMS listesiyle ayni kalmalidir.
  */
+import { CHAMPIONS } from "../game/champions";
+
 export type Clip =
   | "Idle"
   | "Walking_A"
@@ -233,18 +235,25 @@ export function loadoutOf(id: string): Loadout {
   return LOADOUTS[id] ?? DEFAULT_LOADOUT;
 }
 
-/** Yuklenecek sampiyon modelleri. */
+/**
+ * Yuklenecek sampiyon modelleri.
+ *
+ * Oyunda yer alan sampiyonlarin gercekten kullandigi dosyalar; kapali
+ * sampiyonlarin modelleri bosuna indirilmez.
+ */
 export const CHAMPION_MODEL_FILES = [
-  "champ-knight",
-  "champ-barbarian",
-  "champ-rogue",
-  "champ-hooded",
-  "champ-mage",
-  "monster-rogue",
+  ...new Set(CHAMPIONS.map((c) => loadoutOf(c.id).model)),
 ];
 
 /** Sampiyonlara disaridan takilan hazir silahlar. */
-export const CHAMPION_WEAPONS = ["dagger", "staff", "spellbook-closed"];
+export const CHAMPION_WEAPONS = [
+  ...new Set(
+    CHAMPIONS.flatMap((c) => {
+      const l = loadoutOf(c.id);
+      return [l.mainHand, l.offHand].filter((x): x is string => !!x);
+    }),
+  ),
+];
 
 /** Minyon turu -> model. */
 export const MINION_MODELS: Record<string, string> = {

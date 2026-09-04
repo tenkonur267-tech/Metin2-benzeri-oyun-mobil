@@ -1,10 +1,12 @@
 import type { ChampionDef } from "./types";
 
 /**
- * Sekiz oynanabilir sampiyon. Yetenek etkileri `abilities.ts` icinde
+ * Tum sampiyon tanimlari. Yetenek etkileri `abilities.ts` icinde
  * `<sampiyonId>:<tus>` anahtariyla eslesir.
+ *
+ * Oyunda hangilerinin yer alacagini asagidaki `ENABLED` listesi belirler.
  */
-export const CHAMPIONS: ChampionDef[] = [
+export const CHAMPION_POOL: ChampionDef[] = [
   // =========================================================================
   {
     id: "kaya",
@@ -229,6 +231,16 @@ export const CHAMPIONS: ChampionDef[] = [
     ],
   },
 ];
+
+/**
+ * Su an oyunda yer alan sampiyonlar.
+ *
+ * Tek bir sampiyonla saglam bir temel kurulup digerleri sonra
+ * eklenecek; geri acmak icin kimligini bu listeye yazmak yeter.
+ */
+const ENABLED = ["kaya"];
+
+export const CHAMPIONS: ChampionDef[] = CHAMPION_POOL.filter((c) => ENABLED.includes(c.id));
 
 export const CHAMPION_BY_ID = new Map(CHAMPIONS.map((c) => [c.id, c]));
 

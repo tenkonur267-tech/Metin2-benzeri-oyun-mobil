@@ -210,29 +210,55 @@ export class Fx {
     // Salinim izi
     this.beam(
       { x: from.x + d.x * 14, y: from.y + d.y * 14 },
-      { x: to.x + d.x * 4, y: to.y + d.y * 4 },
+      { x: to.x + d.x * 6, y: to.y + d.y * 6 },
       "#ffffff",
-      0.09,
-      crit ? 6 : 4,
+      0.13,
+      crit ? 8 : 6,
     );
     this.beam(
       { x: from.x + d.x * 12, y: from.y + d.y * 12 },
-      { x: to.x + d.x * 2, y: to.y + d.y * 2 },
+      { x: to.x + d.x * 3, y: to.y + d.y * 3 },
       color,
-      0.16,
-      crit ? 9 : 6,
+      0.2,
+      crit ? 12 : 9,
     );
 
-    // Carpma kivilcimlari ve halkasi
-    this.burst(hit, "#fff3d0", crit ? 12 : 7, crit ? 190 : 130);
-    this.ring(hit, crit ? 26 : 16, "#ffffff", crit ? 0.26 : 0.18, crit ? 3 : 2);
+    // Carpma kivilcimlari ve halkalari
+    this.spark(hit, "#fff6dc", crit ? 18 : 12, crit ? 230 : 170, crit ? 5.5 : 4.2);
+    this.spark(hit, color, crit ? 10 : 6, crit ? 150 : 110, crit ? 4.5 : 3.4);
+    this.ring(hit, crit ? 30 : 20, "#ffffff", crit ? 0.34 : 0.26, crit ? 4 : 3);
+    this.ring(hit, crit ? 44 : 30, color, crit ? 0.4 : 0.3, 2);
   }
 
   /** Menzilli merminin hedefe carpmasi. */
   rangedImpact(pos: Vec2, color: string, crit: boolean): void {
-    this.burst(pos, "#fff3d0", crit ? 10 : 6, crit ? 170 : 110);
-    this.burst(pos, color, crit ? 8 : 5, crit ? 130 : 85);
-    this.ring(pos, crit ? 22 : 14, color, 0.2, 2);
+    this.spark(pos, "#fff6dc", crit ? 16 : 10, crit ? 200 : 140, crit ? 5 : 3.8);
+    this.spark(pos, color, crit ? 12 : 8, crit ? 150 : 100, crit ? 4.2 : 3.2);
+    this.ring(pos, crit ? 26 : 18, color, 0.3, 3);
+  }
+
+  /**
+   * Kivilcim patlamasi.
+   *
+   * `burst`ten farki, parcacik boyutunun cagiran tarafindan verilmesi:
+   * darbe kivilcimlari savas alaninda secilsin diye iri olmali.
+   */
+  spark(pos: Vec2, color: string, count: number, speed: number, size: number): void {
+    if (this.particles.length > 500) return;
+    for (let i = 0; i < count; i++) {
+      const a = rng.range(0, Math.PI * 2);
+      const s = rng.range(speed * 0.35, speed);
+      this.particles.push({
+        pos: { x: pos.x, y: pos.y },
+        vel: { x: Math.cos(a) * s, y: Math.sin(a) * s },
+        life: rng.range(0.22, 0.45),
+        maxLife: 0.45,
+        color,
+        size: rng.range(size * 0.55, size),
+        kind: "spark",
+        angle: a,
+      });
+    }
   }
 
   levelUp(pos: Vec2, team: Team): void {
