@@ -459,6 +459,12 @@ export abstract class Unit {
   }
 }
 
+/**
+ * Hedef degistirmek icin yeni adayin ne kadar daha yakin olmasi gerektigi.
+ * Esit mesafedeki iki dusman arasinda gidip gelmeyi onler.
+ */
+const TARGET_SWITCH_MARGIN = 6;
+
 // ---------------------------------------------------------------------------
 // Minyon
 // ---------------------------------------------------------------------------
@@ -516,9 +522,16 @@ export class Minion extends Unit {
     this.updateEffects(world, dt);
     this.aggroTimer -= dt;
 
-    // Hedef sec
+    // Hedef sec: her karede en yakin dusmana bakilir.
+    // Esit mesafede saga sola donup titrememesi icin kucuk bir esik var:
+    // yeni aday belirgin sekilde daha yakinsa hedef degistirilir.
+    const near = world.findMinionTarget(this);
     if (!this.target || !this.target.alive || dist(this.pos, this.target.pos) > 320) {
-      this.target = world.findMinionTarget(this);
+      this.target = near;
+    } else if (near && near !== this.target) {
+      const dNew = dist(this.pos, near.pos) - near.radius;
+      const dCur = dist(this.pos, this.target.pos) - this.target.radius;
+      if (dNew < dCur - TARGET_SWITCH_MARGIN) this.target = near;
     }
 
     const t = this.target;
@@ -730,8 +743,14 @@ export class Monster extends Unit {
     if (this.target && (!this.target.alive || dist(this.pos, this.home) > 260)) {
       this.target = null;
     }
+    // Canavar da her karede en yakin dusmani secer
+    const nearest = world.findMonsterTarget(this);
     if (!this.target) {
-      this.target = world.findMonsterTarget(this);
+      this.target = nearest;
+    } else if (nearest && nearest !== this.target) {
+      const dNew = dist(this.pos, nearest.pos) - nearest.radius;
+      const dCur = dist(this.pos, this.target.pos) - this.target.radius;
+      if (dNew < dCur - TARGET_SWITCH_MARGIN) this.target = nearest;
     }
     const t = this.target;
     if (t) {

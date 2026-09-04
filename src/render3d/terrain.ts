@@ -745,8 +745,8 @@ function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
 
   for (const camp of CAMPS) {
-    const r = (camp.epic ? 46 : camp.buff ? 38 : 30) * K;
-    const count = camp.epic ? 8 : camp.buff ? 7 : 5;
+    const r = (camp.epic ? 46 : camp.buff === "scuttle" ? 26 : camp.buff ? 38 : 30) * K;
+    const count = camp.epic ? 8 : camp.buff === "scuttle" ? 0 : camp.buff ? 7 : 5;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2;
       list.push(place(
@@ -772,7 +772,9 @@ function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
               ? 0x5f9bff
               : camp.buff === "red"
                 ? 0xff6a4a
-                : 0x8fd06a,
+                : camp.buff === "scuttle"
+                  ? 0x54ded0
+                  : 0x8fd06a,
         transparent: true,
         opacity: 0.3,
         depthWrite: false,

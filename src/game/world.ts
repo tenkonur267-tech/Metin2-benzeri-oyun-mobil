@@ -256,23 +256,23 @@ export class World {
     return best;
   }
 
+/**
+   * Minyonun hedefi: menzil icindeki **en yakin** dusman.
+   * Tur onceligi yoktur; yanindaki dusmani birakip uzaktakine yurumez.
+   */
   findMinionTarget(m: Minion): Unit | null {
     let best: Unit | null = null;
-    let bestScore = Infinity;
+    let bd = Infinity;
     const R = 210;
     for (const u of this.allUnits()) {
       if (!u.alive || u.team === m.team) continue;
       if (u.kind === "monster") continue;
-      const d = dist(u.pos, m.pos);
+      // Dokunulmaz yapilar (henuz acilmamis kuleler) hedeflenmez
+      if (u.isStructure && (u as Structure).invulnerable) continue;
+      const d = dist(u.pos, m.pos) - u.radius;
       if (d > R) continue;
-      let pri = 3;
-      if (u.kind === "minion") pri = 0;
-      else if (u.kind === "champion") pri = 1;
-      else if (u.kind === "tower") pri = 2;
-      else if (u.kind === "inhibitor" || u.kind === "nexus") pri = 2;
-      const score = pri * 1000 + d;
-      if (score < bestScore) {
-        bestScore = score;
+      if (d < bd) {
+        bd = d;
         best = u;
       }
     }
@@ -311,21 +311,26 @@ export class World {
     return aggressor ?? minion ?? champ;
   }
 
+/**
+   * Orman canavarinin hedefi: kendisine yakin zamanda vuran veya
+   * kampina fazla sokulan birimlerden **en yakin** olani.
+   */
   findMonsterTarget(m: Monster): Unit | null {
     let best: Unit | null = null;
     let bd = Infinity;
+
     for (const c of this.champions) {
       if (!c.alive) continue;
-      const d = dist(c.pos, m.pos);
-      if (d < 175 && d < bd && this.time - (m.recentDamage.get(c.id) ?? -99) < 6) {
+      const d = dist(c.pos, m.pos) - c.radius;
+      const provoked = this.time - (m.recentDamage.get(c.id) ?? -99) < 6;
+      if (d < 175 && provoked && d < bd) {
         bd = d;
         best = c;
       }
     }
-    if (best) return best;
     for (const mi of this.minions) {
       if (!mi.alive) continue;
-      const d = dist(mi.pos, m.pos);
+      const d = dist(mi.pos, m.pos) - mi.radius;
       if (d < 90 && d < bd) {
         bd = d;
         best = mi;
@@ -496,8 +501,15 @@ export class World {
    * Mavi: mana yenilenmesi ve bekleme suresi hissi icin hizlanma + iyilesme.
    * Kizil: saldiri gucu ve can calma.
    */
-  private grantJungleBuff(c: Champion, buff: "blue" | "red"): void {
+  private grantJungleBuff(c: Champion, buff: "blue" | "red" | "scuttle"): void {
     const time = CONFIG.jungleBuffTime;
+    if (buff === "scuttle") {
+      // LoL'deki Kacak Yengec gibi: kisa sureli hiz ve gorus
+      c.addEffect({ id: "buffScuttle", kind: "haste", time: 45, value: 0.15, label: "🦀", color: "#7fe0c8" });
+      c.addEffect({ id: "buffScuttleEye", kind: "reveal", time: 45, value: 1, label: "", color: "#7fe0c8" });
+      this.log(`${c.displayName()} Kacak Yengec'i aldi`, "#7fe0c8");
+      return;
+    }
     if (buff === "blue") {
       c.addEffect({ id: "buffBlue", kind: "haste", time, value: 0.12, label: "💙", color: "#6fa8ff" });
       c.addEffect({ id: "buffBlueHeal", kind: "heal", time, value: 6, label: "", color: "#6fa8ff" });

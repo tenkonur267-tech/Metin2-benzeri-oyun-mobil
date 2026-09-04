@@ -35,6 +35,17 @@ const path = findPath(SPAWN_POS[0], SPAWN_POS[1]);
 if (path.length === 0) bad("mavi ustan kirmizi usse yol bulunamadi");
 else console.log(`  ✓ usler arasi yol: ${path.length} nokta`);
 
+// Her kamp iki usten de yuruyerek ulasilabilir olmali
+// (ejderha ve baron cukurlarinin girisi kapanmasin)
+for (const c of CAMPS) {
+  for (const team of [0, 1] as const) {
+    if (findPath(SPAWN_POS[team], c.pos).length === 0) {
+      bad(`kamp ${c.id} (${c.name}) ${team === 0 ? "mavi" : "kirmizi"} ustan ulasilamiyor`);
+    }
+  }
+}
+console.log(`  ✓ ${CAMPS.length} kampin tamami iki usten de ulasilabilir`);
+
 // Kamplara ulasilabilirlik
 for (const c of CAMPS) {
   if (findPath(SPAWN_POS[0], c.pos).length === 0) bad(`kamp ${c.id} ulasilamaz`);

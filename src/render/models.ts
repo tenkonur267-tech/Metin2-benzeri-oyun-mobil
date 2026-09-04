@@ -170,6 +170,7 @@ export interface CreatureModel {
 }
 
 export const CREATURE_MODELS: Record<string, CreatureModel> = {
+  "Kacak Yengec": { body: "#4fc9b0", bodyDark: "#1f5f52", accent: "#bff2e6", shape: "boar", legs: 4, tail: true },
   "Mavi Muhafiz": { body: "#4f8fe0", bodyDark: "#1f3f70", accent: "#bfe0ff", shape: "golem", legs: 2, horns: true },
   "Kizil Yaban": { body: "#d05a3c", bodyDark: "#6b2416", accent: "#ffcaa8", shape: "boar", legs: 4, horns: true, tail: true },
   Kurtlar: { body: "#7d8794", bodyDark: "#464e58", accent: "#d7dee6", shape: "wolf", legs: 4, tail: true },

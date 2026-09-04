@@ -145,7 +145,18 @@ export interface WallRect {
 }
 
 /** Mavi yarisindaki duvarlar; kirmizi taraf aynalanir. */
+/**
+ * Ejderha cukuru: uc duvarla cevrili, nehre bakan tarafi acik.
+ * Aynalandiginda haritanin diger ucunda baron cukurunu olusturur.
+ */
+const PIT_WALLS: WallRect[] = [
+  { x: 782, y: 638, w: 48, h: 124 },
+  { x: 688, y: 762, w: 142, h: 38 },
+  { x: 688, y: 620, w: 112, h: 38 },
+];
+
 const BLUE_WALLS: WallRect[] = [
+  ...PIT_WALLS,
   { x: 179, y: 285, w: 46, h: 82 },
   { x: 195, y: 414, w: 96, h: 40 },
   { x: 254, y: 488, w: 78, h: 46 },
@@ -212,24 +223,29 @@ export interface CampSpec {
   respawn: number;
   epic?: "dragon" | "baron";
   /** Olduruldugunde vurana gecici guclendirme verir. */
-  buff?: "blue" | "red";
+  buff?: "blue" | "red" | "scuttle";
   scale: number;
 }
 
 /**
- * Orman kamplari League of Legends duzenine gore: her takimin yarisinda
- * iki buff kampi (mavi/kizil) ve dort normal kamp bulunur. Buff kamplari
- * olduruldugunde vurana gecici bir guclendirme verir.
+ * Orman kamplari Summoner's Rift dizilimini izler.
+ *
+ * Her takimin yarisi mid koridoruyla ikiye ayrilir:
+ *   Ust orman (top koridoru tarafi), usten disari dogru:
+ *     Kurtlar -> Mavi Muhafiz -> Yaban Domuzu
+ *   Alt orman (bot koridoru tarafi), usten disari dogru:
+ *     Yirtici -> Kizil Yaban -> Golem
+ * Buff kamplari olduruldugunde vurana gecici bir guclendirme verir.
  */
 const BLUE_CAMPS: Omit<CampSpec, "id">[] = [
-  // Buff kamplari — LoL'deki Mavi Muhafiz ve Kizil Kabuklu karsiligi
-  { name: "Mavi Muhafiz", emoji: "💙", pos: { x: 320, y: 458 }, hp: 1500, ad: 44, armor: 22, gold: 90, xp: 130, respawn: 150, scale: 1.35, buff: "blue" },
-  { name: "Kizil Yaban", emoji: "❤️", pos: { x: 560, y: 740 }, hp: 1500, ad: 46, armor: 22, gold: 90, xp: 130, respawn: 150, scale: 1.35, buff: "red" },
-  // Normal kamplar
+  // --- Ust orman ---
   { name: "Kurtlar", emoji: "🐺", pos: { x: 274, y: 589 }, hp: 900, ad: 32, armor: 12, gold: 68, xp: 90, respawn: 90, scale: 1 },
-  { name: "Golem", emoji: "🪨", pos: { x: 271, y: 371 }, hp: 1250, ad: 40, armor: 20, gold: 82, xp: 110, respawn: 100, scale: 1.2 },
+  { name: "Mavi Muhafiz", emoji: "💙", pos: { x: 320, y: 458 }, hp: 1500, ad: 44, armor: 22, gold: 90, xp: 130, respawn: 150, scale: 1.35, buff: "blue" },
+  { name: "Yaban Domuzu", emoji: "🐗", pos: { x: 235, y: 400 }, hp: 1100, ad: 38, armor: 16, gold: 76, xp: 104, respawn: 100, scale: 1.1 },
+  // --- Alt orman ---
   { name: "Yirtici", emoji: "🦅", pos: { x: 451, y: 692 }, hp: 820, ad: 30, armor: 8, gold: 64, xp: 86, respawn: 90, scale: 0.9 },
-  { name: "Yaban Domuzu", emoji: "🐗", pos: { x: 701, y: 801 }, hp: 1100, ad: 38, armor: 16, gold: 76, xp: 104, respawn: 100, scale: 1.1 },
+  { name: "Kizil Yaban", emoji: "❤️", pos: { x: 560, y: 740 }, hp: 1500, ad: 46, armor: 22, gold: 90, xp: 130, respawn: 150, scale: 1.35, buff: "red" },
+  { name: "Golem", emoji: "🪨", pos: { x: 744, y: 846 }, hp: 1250, ad: 40, armor: 20, gold: 82, xp: 110, respawn: 100, scale: 1.2 },
 ];
 
 export const CAMPS: CampSpec[] = [
@@ -248,6 +264,34 @@ export const CAMPS: CampSpec[] = [
     respawn: 150,
     epic: "dragon",
     scale: 1.7,
+  },
+  {
+    id: "scuttle-top",
+    name: "Kacak Yengec",
+    emoji: "🦀",
+    pos: scp({ x: 392, y: 428 }),
+    hp: 700,
+    ad: 0,
+    armor: 6,
+    gold: 40,
+    xp: 60,
+    respawn: 120,
+    buff: "scuttle",
+    scale: 0.85,
+  },
+  {
+    id: "scuttle-bot",
+    name: "Kacak Yengec",
+    emoji: "🦀",
+    pos: scp({ x: 608, y: 572 }),
+    hp: 700,
+    ad: 0,
+    armor: 6,
+    gold: 40,
+    xp: 60,
+    respawn: 120,
+    buff: "scuttle",
+    scale: 0.85,
   },
   {
     id: "baron",
