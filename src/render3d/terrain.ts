@@ -72,6 +72,28 @@ const BASE_R = 135 * K;
 /** Harita kenarindaki kayalik bant. */
 const EDGE_BAND = 46 * K;
 
+/**
+ * Bir noktanin duvar dikdortgeninin ne kadar icinde oldugu (disarida 0).
+ *
+ * League of Legends'da orman duvarlari yigin kaya degil, uzerine agac
+ * cikmis kayalik yukseltilerdir; burada da duvarlar arazinin kendisini
+ * yukselterek olusturulur.
+ */
+export function wallDepth(x: number, y: number): number {
+  let best = 0;
+  for (const w of WALLS) {
+    const dx = Math.max(w.x - x, x - (w.x + w.w));
+    const dy = Math.max(w.y - y, y - (w.y + w.h));
+    const inside = -Math.max(dx, dy);
+    if (inside > best) best = inside;
+  }
+  return best;
+}
+
+/** Duvar kayaliginin yuksekligi ve kenar egiminin genisligi. */
+const WALL_HEIGHT = 34;
+const WALL_SLOPE = 26;
+
 /** Arazi yuksekligi (oyun birimleri). */
 export function terrainHeight(x: number, y: number): number {
   const dl = laneDist(x, y);
@@ -97,6 +119,11 @@ export function terrainHeight(x: number, y: number): number {
   const edge = Math.min(x, y, MAP_SIZE - x, MAP_SIZE - y);
   if (edge < EDGE_BAND) h += (EDGE_BAND - edge) * (0.85 / K);
 
+  // Gecilmez duvarlar: dikdortgenin kendi sinirindan iceri dogru yukselir,
+  // boylece disarida yuruyen birimler zemin seviyesinde kalir.
+  const wd = wallDepth(x, y);
+  if (wd > 0) h += WALL_HEIGHT * smooth(0, WALL_SLOPE, wd);
+
   return h;
 }
 
@@ -107,6 +134,7 @@ const C_RIVER = new THREE.Color(0x5f8f9e);
 const C_BASE_BLUE = new THREE.Color(0x4f86bd);
 const C_BASE_RED = new THREE.Color(0xb16055);
 const C_ROCK = new THREE.Color(0x9aa2ab);
+const C_WALL = new THREE.Color(0x7f868f);
 
 /** Zemin rengi ve doku karisim agirliklari (cimen, toprak, kaya). */
 function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3): void {
@@ -132,8 +160,12 @@ function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3
   }
   color.lerp(C_ROCK, 1 - edgeT);
 
+  // Duvar kayaligi
+  const wallT = smooth(-8, WALL_SLOPE * 0.8, wallDepth(x, y));
+  color.lerp(C_WALL, wallT);
+
   const dirt = (1 - laneT) * 0.9 + (1 - riverT) * 0.5;
-  const rock = (1 - edgeT) * 0.95 + (1 - riverT) * 0.3;
+  const rock = (1 - edgeT) * 0.95 + (1 - riverT) * 0.3 + wallT * 1.4;
   const grass = Math.max(0.05, 1 - dirt - rock);
   const sum = dirt + rock + grass;
   blend.set(grass / sum, dirt / sum, rock / sum);
@@ -146,6 +178,8 @@ function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3
 export interface TerrainBuild {
   group: THREE.Group;
   ground: THREE.Mesh;
+  /** Nehir materyali; her karede `uTime` guncellenir. */
+  water: THREE.ShaderMaterial;
   /** Hazir modellerden olusan dekor (savas sisi ayrica uygulanir). */
   decor: THREE.Group;
   visionTexture: THREE.DataTexture;
@@ -157,13 +191,52 @@ const VISION_SIZE = 128;
 
 /** Harita dekorunda kullanilan hazir modeller. */
 export const PROP_NAMES = [
-  "tree-single-a", "tree-single-b",
+  // Igne yaprakli obekler (KayKit)
   "trees-a-small", "trees-a-medium", "trees-a-large",
   "trees-b-small", "trees-b-medium", "trees-b-large",
+  "tree-single-a", "tree-single-b",
+  // Genis yaprakli agaclar ve calilar (Kenney Nature Kit)
+  "nat-tree-a", "nat-tree-b", "nat-tree-c", "nat-tree-d", "nat-tree-e", "nat-tree-f",
+  "nat-bush-a", "nat-bush-b", "nat-bush-c", "nat-grass-a", "nat-grass-b",
+  "nat-rock-a", "nat-rock-b", "nat-stump", "nat-log",
+  // Kayalar
   "rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e",
   "mountain-a", "mountain-b", "mountain-c",
   "waterplant-a", "waterplant-b",
 ];
+
+/**
+ * Kenney doga modelleri nane yesili / seftali paletiyle geliyor.
+ * Oyunun geri kalanina uymasi icin yaprak, govde ve kaya renkleri
+ * yeniden boyanir.
+ */
+const NATURE_PALETTE: Record<string, number> = {
+  leafsGreen: 0x2f7d3e,
+  leafsFall: 0xb8622c,
+  grass: 0x2f7d3e,
+  woodBark: 0x5f452e,
+  wood: 0x5f452e,
+  dirt: 0x8b9199,
+  stone: 0x8b9199,
+  rock: 0x8b9199,
+};
+
+/**
+ * Kaya modellerinde ustteki "grass" yuzeyi duz yesil bir kapak gibi
+ * gorunuyor; kayalarda yosunumsu gri-yesile cekilir.
+ */
+const ROCK_PALETTE: Record<string, number> = {
+  grass: 0x77836b,
+  dirt: 0x8b9199,
+  stone: 0x8b9199,
+  rock: 0x8b9199,
+};
+
+/** Yapraga gore boyanacak modeller. */
+const NATURE_MODELS = PROP_NAMES.filter((n) => n.startsWith("nat-"));
+
+/** Kaya paletiyle boyanacak modeller. */
+const NATURE_ROCKS = ["nat-rock-a", "nat-rock-b"];
 
 export function buildTerrain(props: PropLibrary): TerrainBuild {
   const group = new THREE.Group();
@@ -209,26 +282,24 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   ground.receiveShadow = true;
   group.add(ground);
 
-  // --- Su yuzeyi ---
-  const waterGeo = new THREE.PlaneGeometry(MAP_SIZE * 1.6, 130 * K, 1, 1);
+  // --- Nehir ---
+  const waterMat = makeWaterMaterial();
+  // Kosegen boyu: kare haritayi tam kat eder, disari tasmaz
+  const waterGeo = new THREE.PlaneGeometry(MAP_SIZE * Math.SQRT2, 132 * K, 48, 8);
   waterGeo.rotateX(-Math.PI / 2);
-  const water = new THREE.Mesh(
-    waterGeo,
-    new THREE.MeshStandardMaterial({
-      color: 0x4fb0cc,
-      transparent: true,
-      opacity: 0.6,
-      roughness: 0.15,
-      metalness: 0.1,
-      emissive: 0x0d3a4a,
-      emissiveIntensity: 0.3,
-    }),
-  );
-  water.position.set(MAP_SIZE / 2, -1.2, MAP_SIZE / 2);
+  const water = new THREE.Mesh(waterGeo, waterMat);
+  water.position.set(MAP_SIZE / 2, -1.0, MAP_SIZE / 2);
   water.rotation.y = -Math.PI / 4;
+  water.renderOrder = 1;
   group.add(water);
 
   // --- Hazir modellerle dekor ---
+  for (const name of NATURE_MODELS) {
+    if (props.has(name)) props.recolor(name, NATURE_PALETTE);
+  }
+  for (const name of NATURE_ROCKS) {
+    if (props.has(name)) props.recolor(name, ROCK_PALETTE);
+  }
   const decor = new THREE.Group();
   decor.add(buildRockWalls(props, rng));
   decor.add(buildBushClusters(props, rng));
@@ -237,7 +308,80 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   decor.add(buildBases(props, rng));
   group.add(decor);
 
-  return { group, ground, decor, visionTexture, visionData, visionSize: VISION_SIZE };
+  return { group, ground, decor, water: waterMat, visionTexture, visionData, visionSize: VISION_SIZE };
+}
+
+/**
+ * Nehir yuzeyi.
+ *
+ * League of Legends'daki nehir gibi: akis yonunde kayan iki dalga katmani,
+ * kenarlarda kopuk seridi ve derinlige gore koyulasan turkuaz bir renk.
+ * Zemin altta gorunmeye devam etsin diye yari saydamdir.
+ */
+export function makeWaterMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uShallow: { value: new THREE.Color(0x7fd6e8) },
+      uDeep: { value: new THREE.Color(0x1d6f8c) },
+      uFoam: { value: new THREE.Color(0xdff6ff) },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vWorld;
+      void main() {
+        vUv = uv;
+        vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec2 vUv;
+      varying vec3 vWorld;
+      uniform float uTime;
+      uniform vec3 uShallow;
+      uniform vec3 uDeep;
+      uniform vec3 uFoam;
+
+      // Ucuz deger gurultusu
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                   mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+
+      void main() {
+        // Kiyiya uzaklik: 0 = orta, 1 = kenar
+        float bank = abs(vUv.y - 0.5) * 2.0;
+
+        // Akis yonunde kayan iki dalga katmani
+        vec2 flow = vec2(vUv.x * 60.0, vUv.y * 6.0);
+        float w1 = noise(flow + vec2(uTime * 0.55, 0.0));
+        float w2 = noise(flow * 1.9 - vec2(uTime * 0.31, uTime * 0.08));
+        float ripple = w1 * 0.6 + w2 * 0.4;
+
+        // Derinlige gore renk
+        vec3 col = mix(uDeep, uShallow, smoothstep(0.15, 0.95, bank) * 0.75 + ripple * 0.35);
+
+        // Kenar kopugu
+        float foam = smoothstep(0.72, 1.0, bank + ripple * 0.16);
+        float foamPulse = 0.65 + 0.35 * sin(uTime * 1.6 + vUv.x * 40.0);
+        col = mix(col, uFoam, foam * foamPulse);
+
+        // Parildayan yuzey cizgileri
+        col += vec3(0.10, 0.14, 0.16) * smoothstep(0.62, 0.95, ripple);
+
+        float alpha = mix(0.82, 0.42, smoothstep(0.55, 1.0, bank));
+        // Nehrin uclari harita kosesinde yumusakca biter
+        alpha *= smoothstep(0.0, 0.035, vUv.x) * smoothstep(1.0, 0.965, vUv.x);
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -430,14 +574,20 @@ function instancePlacements(props: PropLibrary, list: Placement[]): THREE.Group 
   return g;
 }
 
-// Model gruplari (hepsi KayKit Medieval Hexagon Pack, CC0)
-const BIG_TREES = ["trees-a-large", "trees-b-large"];
-const MID_TREES = ["trees-a-medium", "trees-b-medium"];
-const SMALL_TREES = ["trees-a-small", "trees-b-small"];
-const SINGLE_TREES = ["tree-single-a", "tree-single-b"];
-const ROCKS = ["rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e"];
+// Model gruplari
+/** Genis yaprakli tekil agaclar — ormanin ana dokusu. */
+const BROADLEAF = ["nat-tree-a", "nat-tree-b", "nat-tree-c", "nat-tree-d", "nat-tree-f"];
+/** Ince ve uzun agaclar. */
+const TALL_TREES = ["nat-tree-e", "nat-tree-f"];
+/** Igne yaprakli obekler — arka planda kalabalik yapar. */
+const CONIFER_CLUMPS = ["trees-a-large", "trees-b-large", "trees-a-medium", "trees-b-medium"];
+/** Cali obekleri (gizlenme alanlari). */
+const BUSHES_MODELS = ["nat-bush-a", "nat-bush-b", "nat-bush-c"];
+const GRASS_MODELS = ["nat-grass-a", "nat-grass-b"];
+const ROCKS = ["rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e", "nat-rock-a", "nat-rock-b"];
 const MOUNTAINS = ["mountain-a", "mountain-b", "mountain-c"];
 const WATERPLANTS = ["waterplant-a", "waterplant-b"];
+const FOREST_FLOOR = ["nat-stump", "nat-log"];
 
 /** Modeli istenen yukseklige olceklendirip yerlesim kaydi olusturur. */
 function place(
@@ -461,46 +611,68 @@ function place(
  * Gecilmez duvarlar: dikdortgenin uzun ekseni boyunca kaya/tepe dizisi.
  * Duvarin nerede oldugu tek bakista anlasilsin diye siralidir.
  */
+/**
+ * Duvar kayaliginin ustunu ve eteklerini susler.
+ * Duvarin kendisi arazi yuksekligiyle olusturulur (bkz. `terrainHeight`);
+ * burada sadece uzerine cikan agaclar ve dibindeki kayalar eklenir.
+ */
 function buildRockWalls(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
-  const STEP = 30;
+  const STEP = 42;
   for (const w of WALLS) {
-    // Dikdortgeni iki eksende de doldur; tek sira kaya bosluklu gorunuyor
     const nx = Math.max(1, Math.round(w.w / STEP));
     const ny = Math.max(1, Math.round(w.h / STEP));
     for (let i = 0; i <= nx; i++) {
       for (let j = 0; j <= ny; j++) {
         const x = w.x + (i / nx) * w.w;
         const y = w.y + (j / ny) * w.h;
-        const big = (i + j) % 2 === 0;
-        list.push(place(
-          props,
-          rng.pick(MOUNTAINS),
-          x, y,
-          big ? 36 : 27,
-          rng.range(0, Math.PI * 2),
-        ));
+        const deep = wallDepth(x, y) > WALL_SLOPE * 0.9;
+        if (deep) {
+          // Yaylanin ustu: agac ve cali (LoL'deki gibi duvarin ustu yesil)
+          if (rng.chance(0.55)) {
+            list.push(place(props, rng.pick(BROADLEAF), x, y, rng.range(40, 54), rng.range(0, Math.PI * 2)));
+          } else {
+            list.push(place(props, rng.pick(BUSHES_MODELS), x, y, rng.range(12, 18), rng.range(0, Math.PI * 2)));
+          }
+        } else if (rng.chance(0.7)) {
+          // Etek: kaya bloklari kenari sertlestirir
+          list.push(place(props, rng.pick(MOUNTAINS), x, y, rng.range(18, 26), rng.range(0, Math.PI * 2)));
+        }
       }
     }
   }
   return instancePlacements(props, list);
 }
 
-/** Calilar (gizlenme alanlari): sik kucuk agac obekleri. */
+/**
+ * Calilar (gizlenme alanlari): League of Legends'daki gibi sik, alcak ve
+ * koyu yesil cali obekleri. Alan icini tamamen doldurur ki icine girildigi
+ * belli olsun.
+ */
 function buildBushClusters(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
   for (const b of BUSHES) {
-    const count = Math.max(5, Math.round((b.r * Math.PI * 2) / 22));
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2;
+    // Ic ice iki halka + merkez
+    for (const [ring, frac] of [[1, 0.94], [2, 0.66], [3, 0.34]] as const) {
+      const count = Math.max(5, Math.round((b.r * frac * Math.PI * 2) / 15));
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2 + ring * 0.4;
+        list.push(place(
+          props, rng.pick(BUSHES_MODELS),
+          b.x + Math.cos(a) * b.r * frac,
+          b.y + Math.sin(a) * b.r * frac,
+          rng.range(13, 18), rng.range(0, Math.PI * 2),
+        ));
+      }
+    }
+    for (let i = 0; i < 3; i++) {
       list.push(place(
-        props, rng.pick(SMALL_TREES),
-        b.x + Math.cos(a) * b.r * 0.7,
-        b.y + Math.sin(a) * b.r * 0.7,
-        20, rng.range(0, Math.PI * 2),
+        props, rng.pick(BUSHES_MODELS),
+        b.x + rng.range(-b.r * 0.3, b.r * 0.3),
+        b.y + rng.range(-b.r * 0.3, b.r * 0.3),
+        rng.range(14, 19), rng.range(0, Math.PI * 2),
       ));
     }
-    list.push(place(props, rng.pick(SMALL_TREES), b.x, b.y, 22, rng.range(0, Math.PI * 2)));
   }
   return instancePlacements(props, list);
 }
@@ -529,9 +701,28 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
     if (!free(x, y, 52)) continue;
     taken.push({ x, y });
     const roll = rng.next();
-    const model = roll < 0.4 ? rng.pick(BIG_TREES) : roll < 0.8 ? rng.pick(MID_TREES) : rng.pick(SINGLE_TREES);
-    const height = roll < 0.4 ? rng.range(52, 66) : roll < 0.8 ? rng.range(40, 52) : rng.range(30, 40);
-    list.push(place(props, model, x, y, height, rng.range(0, Math.PI * 2)));
+    if (roll < 0.5) {
+      list.push(place(props, rng.pick(BROADLEAF), x, y, rng.range(46, 64), rng.range(0, Math.PI * 2)));
+    } else if (roll < 0.72) {
+      list.push(place(props, rng.pick(TALL_TREES), x, y, rng.range(56, 74), rng.range(0, Math.PI * 2)));
+    } else {
+      list.push(place(props, rng.pick(CONIFER_CLUMPS), x, y, rng.range(42, 58), rng.range(0, Math.PI * 2)));
+    }
+    // Agaclarin dibine cali ve ot
+    if (rng.chance(0.5)) {
+      list.push(place(
+        props, rng.pick(GRASS_MODELS),
+        x + rng.range(-22, 22), y + rng.range(-22, 22),
+        rng.range(7, 12), rng.range(0, Math.PI * 2),
+      ));
+    }
+    if (rng.chance(0.25)) {
+      list.push(place(
+        props, rng.pick(FOREST_FLOOR),
+        x + rng.range(-26, 26), y + rng.range(-26, 26),
+        rng.range(8, 13), rng.range(0, Math.PI * 2),
+      ));
+    }
   }
 
   // Nehir kiyisina su bitkileri

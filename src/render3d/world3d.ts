@@ -208,6 +208,7 @@ export class World3D {
       this.structures.get(s.id)?.update(this.time);
     }
     this.minions.update(world.minions, team, dt);
+    if (this.terrain) this.terrain.water.uniforms.uTime.value = this.time;
     this.fx.update(world, this.time);
 
     if (++this.visionFrame % 2 === 0) this.updateVision(world);

@@ -16,6 +16,27 @@ Yine de yaraticiya tesekkur olarak burada belirtilmistir.
 Yapilar mavi ve kirmizi olmak uzere iki takim renginde indirilir; oyunda
 renk degistirilmez, paketteki hazir varyantlar kullanilir.
 
+## Orman: genis yaprakli agaclar, calilar ve kayalar
+
+`nat-*` ile baslayan modeller **Kenney Nature Kit 2.1** paketinden gelir —
+**CC0 1.0**, atif zorunlu degil.
+
+**Yaratici:** [Kenney](https://kenney.nl/assets/nature-kit)
+**Ayna depo:** [ETdoFresh/kenney.nl](https://github.com/ETdoFresh/kenney.nl)
+
+| Dosya | Kaynak |
+| --- | --- |
+| `nat-tree-a` … `nat-tree-f` | `tree_default`, `tree_fat`, `tree_oak`, `tree_detailed`, `tree_tall`, `tree_thin` |
+| `nat-bush-a` … `nat-bush-c` | `plant_bush`, `plant_bushDetailed`, `plant_bushLarge` |
+| `nat-grass-a`, `nat-grass-b` | `grass_leafs`, `grass_large` |
+| `nat-rock-a`, `nat-rock-b` | `rock_largeA`, `rock_largeB` |
+| `nat-cliff*` | `cliff_block_rock`, `cliff_top_rock`, `cliff_large_rock` |
+| `nat-stump`, `nat-log` | `stump_old`, `log` |
+
+Bu modeller nane yesili / seftali paletiyle gelir; oyunda materyal adina
+gore (`leafsGreen`, `woodBark`, `grass`, `dirt`) ormana uyacak sekilde
+yeniden boyanir.
+
 ## Dokular
 
 `public/textures/` altindaki `grass`, `dirt`, `rock`, `sand` zemin dokulari
@@ -35,5 +56,6 @@ sikistirma). Ham 40 MB -> yaklasik 4.5 MB.
 
 ## Geri kalanlar
 
-Arazi yukseklik alani, savas sisi, efektler, sesler ve arayuz bu depoda
-kodla uretilir.
+Arazi yukseklik alani (koridorlar, nehir yatagi, orman duvarlarinin
+kayalik yukseltileri), nehir yuzeyi golgelendiricisi, savas sisi,
+efektler, sesler ve arayuz bu depoda kodla uretilir.

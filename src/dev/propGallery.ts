@@ -23,7 +23,7 @@ const SIZE = 190;
 async function main(): Promise<void> {
   const grid = document.getElementById("grid") as HTMLDivElement;
   const lib = new PropLibrary();
-  await lib.load([...NAMES, "dagger", "staff", "spellbook-closed"]);
+  await lib.load([...new Set([...NAMES, "dagger", "staff", "spellbook-closed"])]);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(SIZE, SIZE);

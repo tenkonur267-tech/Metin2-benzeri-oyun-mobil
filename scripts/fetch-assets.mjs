@@ -25,6 +25,9 @@ const ADV = `${RAW}/KayKit-Character-Pack-Adventures-1.0/main/addons/kaykit_char
 const SKE = `${RAW}/KayKit-Character-Pack-Skeletons-1.0/main/addons/kaykit_character_pack_skeletons`;
 const HEX = `${RAW}/KayKit-Medieval-Hexagon-Pack-1.0/main/addons/kaykit_medieval_hexagon_pack/Assets/gltf`;
 
+/** Kenney Nature Kit 2.1 (CC0) — yaprakli agaclar, calilar ve kayalik. */
+const NAT = "https://raw.githubusercontent.com/ETdoFresh/kenney.nl/master/kenney_natureKit_2.1/Models/GLTF%20format";
+
 const OUT = "public/models";
 const TMP = ".asset-cache";
 
@@ -129,6 +132,28 @@ const MANIFEST = [
       name: `${name}-${team}`,
     })),
   ),
+
+  // --- Yaprakli agaclar, calilar ve kayalik (Kenney Nature Kit) ---
+  ...[
+    ["tree_default", "nat-tree-a"],
+    ["tree_fat", "nat-tree-b"],
+    ["tree_oak", "nat-tree-c"],
+    ["tree_detailed", "nat-tree-d"],
+    ["tree_tall", "nat-tree-e"],
+    ["tree_thin", "nat-tree-f"],
+    ["plant_bush", "nat-bush-a"],
+    ["plant_bushDetailed", "nat-bush-b"],
+    ["plant_bushLarge", "nat-bush-c"],
+    ["grass_leafs", "nat-grass-a"],
+    ["grass_large", "nat-grass-b"],
+    ["cliff_block_rock", "nat-cliff"],
+    ["cliff_top_rock", "nat-cliff-top"],
+    ["cliff_large_rock", "nat-cliff-large"],
+    ["rock_largeA", "nat-rock-a"],
+    ["rock_largeB", "nat-rock-b"],
+    ["stump_old", "nat-stump"],
+    ["log", "nat-log"],
+  ].map(([src, name]) => ({ kind: "glb", url: `${NAT}/${src}.glb`, name })),
 
   // --- Doga ---
   ...[

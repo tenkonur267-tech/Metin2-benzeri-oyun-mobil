@@ -60,6 +60,20 @@ export class PropLibrary {
     }
   }
 
+  /**
+   * Materyal adina gore yeniden boyar.
+   * Kenney doga modelleri `leafsGreen`, `woodBark`, `grass`, `dirt` gibi
+   * anlamli materyal adlari tasir; boylece paleti oyunun geri kalanina
+   * uydurmak icin dogru parcalari secebiliyoruz.
+   */
+  recolor(name: string, byMaterial: Record<string, number>): void {
+    for (const part of this.get(name).parts) {
+      const std = part.material as THREE.MeshStandardMaterial;
+      const hex = byMaterial[std.name];
+      if (hex !== undefined && std.color) std.color.setHex(hex);
+    }
+  }
+
   /** Tek bir kopya (yapilar gibi benzersiz nesneler icin). */
   clone(name: string, targetHeight?: number): THREE.Group {
     const p = this.get(name);
