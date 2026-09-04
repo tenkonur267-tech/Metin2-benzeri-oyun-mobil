@@ -6,7 +6,11 @@
  *   - Skeletons Character Pack   : minyonlar ve orman canavarlari
  *   - Medieval Hexagon Pack      : kuleler, ana bina, doga
  *
- * Kullanim:  node scripts/fetch-assets.mjs [--skip-optimize]
+ * Kullanim:  npm run assets:fetch   [-- --skip-optimize]
+ *
+ * Not: gltf-transform paketleri devDependencies'te degildir (sharp ile
+ * birlikte 40+ paket getirip CI'yi yavaslatiyorlar). `assets:fetch`
+ * betigi onlari calisma aninda --no-save ile kurar.
  * Cikti:     public/models/*.glb
  */
 import { mkdir, writeFile, readFile, stat, rm, cp } from "node:fs/promises";

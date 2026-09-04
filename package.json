@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "assets:fetch": "node scripts/fetch-assets.mjs",
+    "assets:fetch": "npm i --no-save --no-audit --no-fund @gltf-transform/core@4 @gltf-transform/extensions@4 @gltf-transform/functions@4 && node scripts/fetch-assets.mjs",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "check:map": "esbuild scripts/mapcheck.ts --bundle --platform=node --format=cjs --outfile=node_modules/.tmp-mapcheck.cjs --log-level=warning && node node_modules/.tmp-mapcheck.cjs",
@@ -21,9 +21,6 @@
     "@capacitor/android": "^6.2.2",
     "@capacitor/cli": "^6.2.2",
     "@capacitor/core": "^6.2.2",
-    "@gltf-transform/core": "^4.5.0",
-    "@gltf-transform/extensions": "^4.5.0",
-    "@gltf-transform/functions": "^4.5.0",
     "@types/node": "^26.4.1",
     "@types/three": "^0.185.4",
     "typescript": "^5.6.3",
