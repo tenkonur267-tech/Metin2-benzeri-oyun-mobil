@@ -1,8 +1,29 @@
 import type { Vec2 } from "../core/math";
 import type { Lane, Team } from "./types";
 
-/** Harita 1000x1000 oyun birimi karedir. Mavi us sol-alt, kirmizi us sag-ust. */
-export const MAP_SIZE = 1000;
+/**
+ * Harita kenar uzunlugu (oyun birimi). Mavi us sol-alt, kirmizi us sag-ust.
+ *
+ * Duzen koordinatlari 1000 birimlik bir tasarim izgarasinda yazilmistir;
+ * MAP_SIZE buyudugunde koridorlar, duvarlar, calilar, kamplar ve yapilar
+ * `LAYOUT_SCALE` ile birlikte otomatik olceklenir. Sampiyon boyutlari,
+ * saldiri menzilleri ve hizlar olceklenmez — bu sayede harita buyudukce
+ * koridorlar birbirinden uzaklasir ve kamera League of Legends'daki gibi
+ * haritanin daha kucuk bir kismini gosterir.
+ */
+export const MAP_SIZE = 2000;
+
+/** Duzenin yazildigi tasarim izgarasinin kenar uzunlugu. */
+const DESIGN_SIZE = 1000;
+
+/** Tasarim izgarasindan oyun birimine olcek. */
+export const LAYOUT_SCALE = MAP_SIZE / DESIGN_SIZE;
+
+/** Tasarim izgarasindaki bir uzunlugu oyun birimine cevirir. */
+const sc = (n: number): number => n * LAYOUT_SCALE;
+
+/** Tasarim izgarasindaki bir noktayi oyun birimine cevirir. */
+const scp = (p: Vec2): Vec2 => ({ x: sc(p.x), y: sc(p.y) });
 
 export const TEAM_BLUE: Team = 0;
 export const TEAM_RED: Team = 1;
@@ -15,13 +36,13 @@ export const TEAM_NAMES = ["Mavi", "Kirmizi"] as const;
 export const mirror = (p: Vec2): Vec2 => ({ x: MAP_SIZE - p.x, y: MAP_SIZE - p.y });
 
 export const NEXUS_POS: Record<Team, Vec2> = {
-  0: { x: 95, y: 905 },
-  1: { x: 905, y: 95 },
+  0: scp({ x: 95, y: 905 }),
+  1: scp({ x: 905, y: 95 }),
 };
 
 export const SPAWN_POS: Record<Team, Vec2> = {
-  0: { x: 150, y: 860 },
-  1: { x: 850, y: 140 },
+  0: scp({ x: 150, y: 860 }),
+  1: scp({ x: 850, y: 140 }),
 };
 
 /** Mavi takim minyonlarinin izledigi yol. Kirmizi icin ters cevrilir. */
@@ -62,7 +83,7 @@ export const LANES: Lane[] = ["top", "mid", "bot"];
  * bu yuzden yapi konumlari aynalanirken koridor etiketi de degisir.
  */
 export function lanePath(team: Team, lane: Lane): Vec2[] {
-  const base = BLUE_LANE_PATHS[lane].map((p) => ({ ...p }));
+  const base = BLUE_LANE_PATHS[lane].map(scp);
   return team === 0 ? base : base.reverse();
 }
 
@@ -91,8 +112,8 @@ const BLUE_TOWERS: TowerSpec[] = [
 export function towerSpecs(team: Team): TowerSpec[] {
   return BLUE_TOWERS.map((t) =>
     team === 0
-      ? { ...t, pos: { ...t.pos } }
-      : { ...t, lane: swapLane(t.lane), pos: mirror(t.pos) },
+      ? { ...t, pos: scp(t.pos) }
+      : { ...t, lane: swapLane(t.lane), pos: mirror(scp(t.pos)) },
   );
 }
 
@@ -108,10 +129,10 @@ const BLUE_INHIBS: InhibSpec[] = [
 ];
 
 export function inhibSpecs(team: Team): InhibSpec[] {
-  return BLUE_INHIBS.map((s) =>
+  return BLUE_INHIBS.map((b) =>
     team === 0
-      ? { ...s, pos: { ...s.pos } }
-      : { ...s, lane: swapLane(s.lane), pos: mirror(s.pos) },
+      ? { ...b, pos: scp(b.pos) }
+      : { ...b, lane: swapLane(b.lane), pos: mirror(scp(b.pos)) },
   );
 }
 
@@ -136,9 +157,16 @@ const BLUE_WALLS: WallRect[] = [
   { x: 593, y: 757, w: 64, h: 64 },
 ];
 
+const SCALED_WALLS: WallRect[] = BLUE_WALLS.map((w) => ({
+  x: sc(w.x),
+  y: sc(w.y),
+  w: sc(w.w),
+  h: sc(w.h),
+}));
+
 export const WALLS: WallRect[] = [
-  ...BLUE_WALLS,
-  ...BLUE_WALLS.map((w) => ({
+  ...SCALED_WALLS,
+  ...SCALED_WALLS.map((w) => ({
     x: MAP_SIZE - w.x - w.w,
     y: MAP_SIZE - w.y - w.h,
     w: w.w,
@@ -163,9 +191,11 @@ const BLUE_BUSHES: Bush[] = [
   { x: 379, y: 696, r: 34 },
 ];
 
+const SCALED_BUSHES: Bush[] = BLUE_BUSHES.map((b) => ({ x: sc(b.x), y: sc(b.y), r: sc(b.r) }));
+
 export const BUSHES: Bush[] = [
-  ...BLUE_BUSHES,
-  ...BLUE_BUSHES.map((b) => ({ x: MAP_SIZE - b.x, y: MAP_SIZE - b.y, r: b.r })),
+  ...SCALED_BUSHES,
+  ...SCALED_BUSHES.map((b) => ({ x: MAP_SIZE - b.x, y: MAP_SIZE - b.y, r: b.r })),
 ];
 
 /** Orman kamplari. */
@@ -203,13 +233,13 @@ const BLUE_CAMPS: Omit<CampSpec, "id">[] = [
 ];
 
 export const CAMPS: CampSpec[] = [
-  ...BLUE_CAMPS.map((c, i) => ({ ...c, id: `b${i}`, pos: { ...c.pos } })),
-  ...BLUE_CAMPS.map((c, i) => ({ ...c, id: `r${i}`, pos: mirror(c.pos) })),
+  ...BLUE_CAMPS.map((c, i) => ({ ...c, id: `b${i}`, pos: scp(c.pos) })),
+  ...BLUE_CAMPS.map((c, i) => ({ ...c, id: `r${i}`, pos: mirror(scp(c.pos)) })),
   {
     id: "dragon",
     name: "Ejderha",
     emoji: "🐉",
-    pos: { x: 735, y: 700 },
+    pos: scp({ x: 735, y: 700 }),
     hp: 3400,
     ad: 76,
     armor: 26,
@@ -223,7 +253,7 @@ export const CAMPS: CampSpec[] = [
     id: "baron",
     name: "Kadim Ejder",
     emoji: "🐲",
-    pos: { x: 265, y: 300 },
+    pos: scp({ x: 265, y: 300 }),
     hp: 6200,
     ad: 118,
     armor: 40,

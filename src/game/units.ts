@@ -469,11 +469,13 @@ export abstract class Unit {
  * vurur, buyucu ~6, kusatma ~3.6, super ~2.3. Burada minyon govdesi 14
  * birim genisliginde oldugundan menziller ona gore olceklendi.
  */
+// LoL'de minyonlar sampiyon hiziyla neredeyse ayni kosar (325 / 340); harita
+// buyudugu icin buradaki hizlar da o orana cekildi.
 const MINION_BASE: Record<MinionKind, { hp: number; ad: number; range: number; as: number; ms: number; armor: number; mr: number }> = {
-  melee: { hp: 480, ad: 13, range: 10, as: 1.25, ms: 60, armor: 2, mr: 0 },
-  caster: { hp: 300, ad: 24, range: 78, as: 1.0, ms: 60, armor: 0, mr: 12 },
-  cannon: { hp: 900, ad: 42, range: 42, as: 0.7, ms: 57, armor: 6, mr: 12 },
-  super: { hp: 1600, ad: 62, range: 16, as: 0.85, ms: 66, armor: 30, mr: 30 },
+  melee: { hp: 480, ad: 13, range: 10, as: 1.25, ms: 84, armor: 2, mr: 0 },
+  caster: { hp: 300, ad: 24, range: 78, as: 1.0, ms: 84, armor: 0, mr: 12 },
+  cannon: { hp: 900, ad: 42, range: 42, as: 0.7, ms: 80, armor: 6, mr: 12 },
+  super: { hp: 1600, ad: 62, range: 16, as: 0.85, ms: 92, armor: 30, mr: 30 },
 };
 
 export class Minion extends Unit {

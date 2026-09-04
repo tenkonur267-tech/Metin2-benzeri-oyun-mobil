@@ -10,6 +10,7 @@ import {
   BUSHES,
   CAMPS,
   LANES,
+  LAYOUT_SCALE,
   MAP_SIZE,
   NEXUS_POS,
   WALLS,
@@ -55,14 +56,21 @@ const smooth = (edge0: number, edge1: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-const LANE_HALF = 30;
-const LANE_FADE = 62;
+/**
+ * Arazi genislikleri harita boyutuyla birlikte olceklenir; boylece harita
+ * buyudugunde koridorlar da genisler ve oran korunur.
+ */
+const K = LAYOUT_SCALE;
+const LANE_HALF = 30 * K;
+const LANE_FADE = 62 * K;
 // Zemin boyamasinda koridor bandi daha dar tutulur ki yol net gorunsun.
-const LANE_PAINT_HALF = 24;
-const LANE_PAINT_FADE = 44;
-const RIVER_HALF = 30;
-const RIVER_FADE = 58;
-const BASE_R = 135;
+const LANE_PAINT_HALF = 24 * K;
+const LANE_PAINT_FADE = 44 * K;
+const RIVER_HALF = 30 * K;
+const RIVER_FADE = 58 * K;
+const BASE_R = 135 * K;
+/** Harita kenarindaki kayalik bant. */
+const EDGE_BAND = 46 * K;
 
 /** Arazi yuksekligi (oyun birimleri). */
 export function terrainHeight(x: number, y: number): number {
@@ -87,7 +95,7 @@ export function terrainHeight(x: number, y: number): number {
   }
 
   const edge = Math.min(x, y, MAP_SIZE - x, MAP_SIZE - y);
-  if (edge < 46) h += (46 - edge) * 0.85;
+  if (edge < EDGE_BAND) h += (EDGE_BAND - edge) * (0.85 / K);
 
   return h;
 }
@@ -109,7 +117,7 @@ function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3
   const laneT = smooth(LANE_PAINT_HALF, LANE_PAINT_FADE, dl);
   const riverT = dr < RIVER_FADE ? smooth(RIVER_HALF * 0.7, RIVER_FADE, dr) : 1;
   const edge = Math.min(x, y, MAP_SIZE - x, MAP_SIZE - y);
-  const edgeT = smooth(20, 52, edge);
+  const edgeT = smooth(20 * K, 52 * K, edge);
 
   color.copy(C_GRASS).lerp(C_GRASS_DARK, n * 0.55);
   color.lerp(C_LANE, 1 - laneT);
@@ -145,7 +153,7 @@ export interface TerrainBuild {
   visionSize: number;
 }
 
-const VISION_SIZE = 96;
+const VISION_SIZE = 128;
 
 /** Harita dekorunda kullanilan hazir modeller. */
 export const PROP_NAMES = [
@@ -162,7 +170,7 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   const rng = new Rng(90210);
 
   // --- Zemin ---
-  const SEGMENTS = 190;
+  const SEGMENTS = Math.round(150 * Math.sqrt(K));
   const geo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, SEGMENTS, SEGMENTS);
   geo.rotateX(-Math.PI / 2);
   geo.translate(MAP_SIZE / 2, 0, MAP_SIZE / 2);
@@ -202,7 +210,7 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   group.add(ground);
 
   // --- Su yuzeyi ---
-  const waterGeo = new THREE.PlaneGeometry(MAP_SIZE * 1.6, 130, 1, 1);
+  const waterGeo = new THREE.PlaneGeometry(MAP_SIZE * 1.6, 130 * K, 1, 1);
   waterGeo.rotateX(-Math.PI / 2);
   const water = new THREE.Mesh(
     waterGeo,
@@ -368,37 +376,54 @@ interface Placement {
   tiltZ?: number;
 }
 
-/** Yerlesimleri model bazinda gruplayip InstancedMesh'lere yazar. */
+/** Harita kac parcaya bolunerek cizilecek (gorus alani disi elenebilsin diye). */
+const CHUNKS = 6;
+
+/**
+ * Yerlesimleri model ve harita parcasina gore gruplayip InstancedMesh'lere
+ * yazar.
+ *
+ * Tum agaclar tek bir InstancedMesh'te olsaydi kutusu haritanin tamamini
+ * kaplar ve ekran disindakiler de her karede cizilirdi. Harita parcalara
+ * bolununce kamera disinda kalan parcalar tamamen elenir.
+ */
 function instancePlacements(props: PropLibrary, list: Placement[]): THREE.Group {
   const g = new THREE.Group();
-  const byModel = new Map<string, Placement[]>();
+  const cell = MAP_SIZE / CHUNKS;
+  const groups = new Map<string, Placement[]>();
+
   for (const p of list) {
-    const arr = byModel.get(p.model) ?? [];
+    const cx = clamp(Math.floor(p.x / cell), 0, CHUNKS - 1);
+    const cy = clamp(Math.floor(p.y / cell), 0, CHUNKS - 1);
+    const key = `${p.model}|${cx}|${cy}`;
+    const arr = groups.get(key) ?? [];
     arr.push(p);
-    byModel.set(p.model, arr);
+    groups.set(key, arr);
   }
 
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
   const v = new THREE.Vector3();
-  const s = new THREE.Vector3();
+  const sv = new THREE.Vector3();
 
-  for (const [model, items] of byModel) {
+  for (const [key, items] of groups) {
+    const model = key.slice(0, key.indexOf("|"));
     if (!props.has(model)) continue;
     const meshes = props.instanced(model, items.length);
     items.forEach((p, i) => {
       e.set(p.tiltX ?? 0, p.rot, p.tiltZ ?? 0, "YXZ");
       q.setFromEuler(e);
       v.set(p.x, terrainHeight(p.x, p.y) - 0.6, p.y);
-      s.setScalar(p.scale);
-      m4.compose(v, q, s);
+      sv.setScalar(p.scale);
+      m4.compose(v, q, sv);
       for (const im of meshes) im.setMatrixAt(i, m4);
     });
     for (const im of meshes) {
       im.count = items.length;
       im.instanceMatrix.needsUpdate = true;
-      im.frustumCulled = false;
+      im.frustumCulled = true;
+      im.computeBoundingSphere();
       g.add(im);
     }
   }
@@ -438,22 +463,24 @@ function place(
  */
 function buildRockWalls(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
+  const STEP = 30;
   for (const w of WALLS) {
-    const horizontal = w.w >= w.h;
-    const long = horizontal ? w.w : w.h;
-    const steps = Math.max(2, Math.round(long / 34));
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const x = horizontal ? w.x + t * w.w : w.x + w.w / 2;
-      const y = horizontal ? w.y + w.h / 2 : w.y + t * w.h;
-      const big = i % 2 === 0;
-      list.push(place(
-        props,
-        rng.pick(MOUNTAINS),
-        x, y,
-        big ? 36 : 27,
-        rng.range(0, Math.PI * 2),
-      ));
+    // Dikdortgeni iki eksende de doldur; tek sira kaya bosluklu gorunuyor
+    const nx = Math.max(1, Math.round(w.w / STEP));
+    const ny = Math.max(1, Math.round(w.h / STEP));
+    for (let i = 0; i <= nx; i++) {
+      for (let j = 0; j <= ny; j++) {
+        const x = w.x + (i / nx) * w.w;
+        const y = w.y + (j / ny) * w.h;
+        const big = (i + j) % 2 === 0;
+        list.push(place(
+          props,
+          rng.pick(MOUNTAINS),
+          x, y,
+          big ? 36 : 27,
+          rng.range(0, Math.PI * 2),
+        ));
+      }
     }
   }
   return instancePlacements(props, list);
@@ -484,17 +511,19 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
   const taken: Vec2[] = [];
 
   const free = (x: number, y: number, gap: number): boolean => {
-    if (laneDist(x, y) < 62) return false;
-    if (riverDist(x, y) < 52) return false;
-    if (Math.hypot(x - NEXUS_POS[0].x, y - NEXUS_POS[0].y) < 178) return false;
-    if (Math.hypot(x - NEXUS_POS[1].x, y - NEXUS_POS[1].y) < 178) return false;
+    if (laneDist(x, y) < 62 * K) return false;
+    if (riverDist(x, y) < 52 * K) return false;
+    if (Math.hypot(x - NEXUS_POS[0].x, y - NEXUS_POS[0].y) < 178 * K) return false;
+    if (Math.hypot(x - NEXUS_POS[1].x, y - NEXUS_POS[1].y) < 178 * K) return false;
     if (WALLS.some((w) => x > w.x - 26 && x < w.x + w.w + 26 && y > w.y - 26 && y < w.y + w.h + 26)) return false;
     if (BUSHES.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 24)) return false;
-    if (CAMPS.some((cm) => Math.hypot(cm.pos.x - x, cm.pos.y - y) < 58)) return false;
+    if (CAMPS.some((cm) => Math.hypot(cm.pos.x - x, cm.pos.y - y) < 58 * K)) return false;
     return !taken.some((t) => Math.hypot(t.x - x, t.y - y) < gap);
   };
 
-  for (let attempt = 0; attempt < 9000 && list.length < 110; attempt++) {
+  // Agac sayisi harita alaniyla birlikte artar; agac boyutlari sabit kalir.
+  const treeCount = Math.round(110 * K * K);
+  for (let attempt = 0; attempt < treeCount * 90 && list.length < treeCount; attempt++) {
     const x = rng.range(36, MAP_SIZE - 36);
     const y = rng.range(36, MAP_SIZE - 36);
     if (!free(x, y, 52)) continue;
@@ -506,8 +535,8 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
   }
 
   // Nehir kiyisina su bitkileri
-  for (let i = 0; i < 26; i++) {
-    const t = rng.range(120, MAP_SIZE - 120);
+  for (let i = 0; i < Math.round(26 * K); i++) {
+    const t = rng.range(120 * K, MAP_SIZE - 120 * K);
     const side = rng.chance(0.5) ? 1 : -1;
     const off = side * rng.range(26, 40);
     const x = t + off * Math.SQRT1_2;
@@ -525,7 +554,7 @@ function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
 
   for (const camp of CAMPS) {
-    const r = camp.epic ? 46 : camp.buff ? 38 : 30;
+    const r = (camp.epic ? 46 : camp.buff ? 38 : 30) * K;
     const count = camp.epic ? 8 : camp.buff ? 7 : 5;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2;
@@ -584,14 +613,14 @@ function buildBases(props: PropLibrary, rng: Rng): THREE.Group {
     ];
     for (const [model, angleOff, dist] of ring) {
       const a = face + angleOff;
-      const x = clamp(n.x + Math.cos(a) * dist, 58, MAP_SIZE - 58);
-      const y = clamp(n.y + Math.sin(a) * dist, 58, MAP_SIZE - 58);
+      const x = clamp(n.x + Math.cos(a) * dist * K, 58, MAP_SIZE - 58);
+      const y = clamp(n.y + Math.sin(a) * dist * K, 58, MAP_SIZE - 58);
       list.push(place(props, model, x, y, model.startsWith("well") ? 22 : 40, a + Math.PI));
     }
 
     // Cikis yolunun iki yaninda kayalik
-    for (let i = 0; i < 4; i++) {
-      const d = 78 + i * 30;
+    for (let i = 0; i < 6; i++) {
+      const d = (78 + i * 30) * K;
       for (const side of [-1, 1]) {
         const a = face + side * 0.55;
         const x = clamp(n.x + Math.cos(a) * d, 48, MAP_SIZE - 48);

@@ -56,7 +56,7 @@ export class World3D {
     this.stage.scene.add(this.aim.group);
     this.stage.scene.add(this.matchGroup);
     this.matchGroup.add(this.minions.group);
-    const n = 96 * 96;
+    const n = 128 * 128;
     this.explored = new Float32Array(n);
     this.current = new Float32Array(n);
   }
