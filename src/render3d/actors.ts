@@ -30,17 +30,28 @@ export function facingToYaw(facing: number): number {
 // Sampiyon
 // ---------------------------------------------------------------------------
 
-type AnimName = "Idle" | "Walk" | "Run" | "Attack" | "Cast" | "Death" | "Hit";
+/**
+ * Animasyon durumlari. "Q/W/E/R" yetenege ozel kliplerdir; sampiyonun
+ * kullandigi tusa gore secilir (bkz. loadout.ts `abilities`).
+ */
+type AnimName =
+  | "Idle" | "Walk" | "Run" | "Attack" | "Cast" | "Death" | "Hit" | "Recall"
+  | "Q" | "W" | "E" | "R";
 
-/** Oyun ici durum adi -> KayKit klip adi. */
-const BASE_CLIPS: Record<AnimName, Clip> = {
+/** Bir kez oynayip son karede duran (donguye girmeyen) durumlar. */
+const ONCE = new Set<AnimName>(["Attack", "Cast", "Death", "Hit", "Q", "W", "E", "R"]);
+
+/** Yetenek animasyonu oynarken hareket/beklemeye donmeyi engelleyen durumlar. */
+const BUSY = new Set<AnimName>(["Attack", "Cast", "Q", "W", "E", "R"]);
+
+/** Oyun ici durum adi -> varsayilan KayKit klip adi. */
+const BASE_CLIPS: Record<"Idle" | "Walk" | "Run" | "Death" | "Hit" | "Recall", Clip> = {
   Idle: "Idle",
   Walk: "Walking_A",
   Run: "Running_A",
-  Attack: "1H_Melee_Attack_Chop",
-  Cast: "Spellcast_Shoot",
   Death: "Death_A",
   Hit: "Hit_A",
+  Recall: "Cheer",
 };
 
 /**
@@ -87,6 +98,9 @@ export class ChampionActor {
   private flashMats: THREE.MeshStandardMaterial[] = [];
   private baseColors: number[] = [];
   private swingCooldown = 0;
+  private hitCooldown = 0;
+  private lastHp = Infinity;
+  private clipLength = new Map<AnimName, number>();
   /** Sampiyon govdesinin oyun birimi cinsinden boyu. */
   readonly bodyHeight: number;
 
@@ -196,21 +210,23 @@ export class ChampionActor {
     }
 
     // --- Animasyonlar ---
-    const clips: Record<AnimName, Clip> = {
+    const clips: Partial<Record<AnimName, Clip>> = {
       ...BASE_CLIPS,
       Attack: loadout.attack,
       Cast: loadout.cast,
+      ...(loadout.abilities ?? {}),
     };
     this.mixer = new THREE.AnimationMixer(this.body);
     for (const [state, clipName] of Object.entries(clips) as [AnimName, Clip][]) {
       const clip = model.animations.find((c) => c.name === clipName);
       if (!clip) continue;
       const action = this.mixer.clipAction(clip);
-      if (state === "Death" || state === "Attack" || state === "Cast" || state === "Hit") {
+      if (ONCE.has(state)) {
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = true;
       }
       this.actions.set(state, action);
+      this.clipLength.set(state, clip.duration);
     }
     this.play("Idle", 0);
   }
@@ -228,19 +244,26 @@ export class ChampionActor {
     this.current = name;
   }
 
-  /** Tek seferlik animasyonu bastan oynatir. */
-  private trigger(name: AnimName): void {
+  /**
+   * Tek seferlik animasyonu bastan oynatir.
+   * `duration` verilirse klip o sureye sigacak sekilde hizlandirilir;
+   * boylece saldiri animasyonu saldiri hizina uyar.
+   */
+  private trigger(name: AnimName, duration?: number): number {
     const a = this.actions.get(name);
-    if (!a) return;
+    if (!a) return 0;
+    const len = this.clipLength.get(name) ?? 1;
+    const speed = duration && duration > 0.05 ? clamp(len / duration, 0.5, 3.2) : 1.5;
     const prev = this.actions.get(this.current);
     if (prev && prev !== a) prev.fadeOut(0.1);
     a.reset();
-    a.setEffectiveTimeScale(1.5);
+    a.setEffectiveTimeScale(speed);
     a.enabled = true;
     a.setEffectiveWeight(1);
     a.fadeIn(0.06);
     a.play();
     this.current = name;
+    return len / speed;
   }
 
   update(dt: number, time: number): void {
@@ -250,21 +273,43 @@ export class ChampionActor {
     this.root.rotation.y = facingToYaw(c.facing);
 
     this.swingCooldown = Math.max(0, this.swingCooldown - dt);
+    this.hitCooldown = Math.max(0, this.hitCooldown - dt);
 
     // --- Animasyon durumu ---
     if (!c.alive) {
       this.play("Death", 0.15);
       this.ring.visible = false;
+      this.lastHp = Infinity;
     } else {
       this.ring.visible = true;
       if (this.current === "Death") this.play("Idle", 0.1);
-      if (c.swing > 0.2 && this.swingCooldown <= 0) {
-        this.trigger("Attack");
-        this.swingCooldown = 0.36;
-      } else if (c.castAnim > 0.24 && this.swingCooldown <= 0) {
-        this.trigger("Cast");
-        this.swingCooldown = 0.34;
-      } else if (this.current !== "Attack" && this.current !== "Cast") {
+
+      const tookDamage = c.hp < this.lastHp - 1;
+      this.lastHp = c.hp;
+
+      if (c.castAnim > 0.24 && this.swingCooldown <= 0) {
+        // Yetenege ozel klip varsa o, yoksa genel buyu animasyonu
+        const key = c.castAnimKey as AnimName;
+        const state: AnimName = this.actions.has(key) ? key : "Cast";
+        // Klip uzun olsa da baska bir yetenek kisa surede devralabilmeli
+        this.swingCooldown = Math.min(this.trigger(state), 0.45);
+      } else if (c.swing > 0.1 && this.swingCooldown <= 0) {
+        // Saldiri animasyonu saldiri hizina uydurulur
+        const period = c.stats.attackSpeed > 0 ? 1 / c.stats.attackSpeed : 0.6;
+        this.swingCooldown = Math.min(this.trigger("Attack", Math.min(period * 0.8, 1.1)), 0.5);
+      } else if (
+        tookDamage &&
+        this.hitCooldown <= 0 &&
+        !BUSY.has(this.current) &&
+        c.speedNow < 8
+      ) {
+        // Yerinde dururken hasar alinca kisa bir irkilme
+        this.trigger("Hit", 0.35);
+        this.hitCooldown = 1.4;
+        this.swingCooldown = 0.2;
+      } else if (c.recallTimer > 0 && !BUSY.has(this.current)) {
+        this.play("Recall", 0.15);
+      } else if (!BUSY.has(this.current) && this.current !== "Hit") {
         if (c.speedNow > 55) this.play("Run");
         else if (c.speedNow > 8) this.play("Walk");
         else this.play("Idle");
@@ -332,6 +377,7 @@ class MinionActor {
   private mixer: THREE.AnimationMixer;
   private actions = new Map<string, THREE.AnimationAction>();
   private current = "";
+  private attackClip: string;
   private body: THREE.Group;
   private mats: THREE.MeshStandardMaterial[] = [];
   private baseColors: THREE.Color[] = [];
@@ -359,7 +405,15 @@ class MinionActor {
     });
 
     this.mixer = new THREE.AnimationMixer(this.body);
-    for (const clip of model.animations) this.actions.set(clip.name, this.mixer.clipAction(clip));
+    for (const clip of model.animations) {
+      const action = this.mixer.clipAction(clip);
+      if (clip.name.startsWith("Death") || clip.name.startsWith("Hit")) {
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+      }
+      this.actions.set(clip.name, action);
+    }
+    this.attackClip = pickAttackClip(model);
     this.play("Idle", 0);
   }
 
@@ -384,7 +438,7 @@ class MinionActor {
     this.root.position.set(mi.pos.x, terrainHeight(mi.pos.x, mi.pos.y), mi.pos.y);
     this.root.rotation.y = facingToYaw(mi.facing);
     if (!mi.alive) this.play("Death_A", 0.1);
-    else if (mi.swing > 0.15) this.play("1H_Melee_Attack_Chop", 0.06);
+    else if (mi.swing > 0.1) this.play(this.attackClip, 0.06);
     else if (mi.speedNow > 6) this.play("Walking_A");
     else this.play("Idle");
     this.mixer.update(dt);
@@ -456,6 +510,7 @@ export class MonsterActor {
   private mixer: THREE.AnimationMixer;
   private actions = new Map<string, THREE.AnimationAction>();
   private current = "";
+  private attackClip: string;
   private body: THREE.Group;
 
   constructor(
@@ -484,6 +539,7 @@ export class MonsterActor {
     for (const clip of model.animations) {
       this.actions.set(clip.name, this.mixer.clipAction(clip));
     }
+    this.attackClip = pickAttackClip(model);
     this.play("Idle");
   }
 
@@ -502,7 +558,7 @@ export class MonsterActor {
     if (!m.alive) return;
     this.root.position.set(m.pos.x, terrainHeight(m.pos.x, m.pos.y), m.pos.y);
     this.root.rotation.y = facingToYaw(m.facing);
-    if (m.swing > 0.2) this.play("1H_Melee_Attack_Chop", 0.08);
+    if (m.swing > 0.1) this.play(this.attackClip, 0.08);
     else if (m.speedNow > 45) this.play("Running_A");
     else if (m.speedNow > 6) this.play("Walking_A");
     else this.play("Idle");
@@ -621,4 +677,18 @@ export class StructureActor {
       m.emissiveIntensity = (1.2 + 0.5 * Math.sin(time * 3 + s.id)) * (s.invulnerable ? 0.5 : 1);
     }
   }
+}
+
+/** Modelde bulunan ilk uygun saldiri klibini secer. */
+function pickAttackClip(model: LoadedModel): string {
+  const prefs = [
+    "1H_Melee_Attack_Chop",
+    "Dualwield_Melee_Attack_Slice",
+    "2H_Melee_Attack_Chop",
+    "Spellcast_Shoot",
+  ];
+  for (const name of prefs) {
+    if (model.animations.some((c) => c.name === name)) return name;
+  }
+  return model.animations[0]?.name ?? "Idle";
 }

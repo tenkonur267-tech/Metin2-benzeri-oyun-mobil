@@ -28,20 +28,49 @@ const HEX = `${RAW}/KayKit-Medieval-Hexagon-Pack-1.0/main/addons/kaykit_medieval
 const OUT = "public/models";
 const TMP = ".asset-cache";
 
-/** Karakterlerde tutulacak animasyonlar (digerleri atilir, dosya kuculur). */
-const KEEP_ANIMS = [
-  "Idle",
-  "Walking_A",
-  "Running_A",
-  "1H_Melee_Attack_Slice_Diagonal",
-  "1H_Melee_Attack_Chop",
-  "2H_Melee_Attack_Chop",
-  "1H_Ranged_Shoot",
-  "Spellcast_Shoot",
-  "Hit_A",
-  "Death_A",
-  "Cheer",
-].join(",");
+/**
+ * Her karakter modelinde tutulacak animasyon klipleri.
+ *
+ * KayKit karakterleri 70'ten fazla klip icerir; dosyanin buyuk kismi
+ * animasyon verisidir. Burada sadece o modelin oyunda kullandigi klipler
+ * birakilir. Liste `src/render3d/loadout.ts` ile ayni kalmalidir.
+ */
+const BASE_ANIMS = ["Idle", "Walking_A", "Running_A", "Hit_A", "Death_A", "Cheer"];
+
+const KEEP_ANIMS = {
+  "champ-knight": [
+    ...BASE_ANIMS,
+    "1H_Melee_Attack_Chop", "1H_Melee_Attack_Slice_Horizontal", "1H_Melee_Attack_Stab",
+    "2H_Melee_Attack_Chop", "2H_Melee_Attack_Slice", "2H_Melee_Attack_Stab",
+    "2H_Melee_Attack_Spin", "Block", "Spellcast_Shoot",
+  ],
+  "champ-barbarian": [
+    ...BASE_ANIMS,
+    "2H_Melee_Attack_Chop", "2H_Melee_Attack_Slice", "2H_Melee_Attack_Stab",
+    "Dodge_Forward", "Spellcast_Shoot",
+  ],
+  "champ-rogue": [
+    ...BASE_ANIMS,
+    "1H_Ranged_Shoot", "1H_Ranged_Reload", "Dodge_Backward", "Throw", "Spellcast_Shoot",
+  ],
+  "champ-hooded": [
+    ...BASE_ANIMS,
+    "Spellcast_Shoot", "Spellcast_Raise", "Spellcast_Long", "Dodge_Forward",
+  ],
+  "champ-mage": [
+    ...BASE_ANIMS,
+    "Spellcast_Shoot", "Spellcast_Raise", "Spellcast_Long", "Dodge_Forward",
+  ],
+  "monster-rogue": [
+    ...BASE_ANIMS,
+    "Dualwield_Melee_Attack_Chop", "Dualwield_Melee_Attack_Slice",
+    "Dualwield_Melee_Attack_Stab", "Spellcast_Raise", "Throw", "Spellcast_Shoot",
+  ],
+  // Minyonlar: tek saldiri, yurume ve olum yeter
+  "minion-melee": ["Idle", "Walking_A", "1H_Melee_Attack_Chop", "Hit_A", "Death_A"],
+  "minion-caster": ["Idle", "Walking_A", "Spellcast_Shoot", "Hit_A", "Death_A"],
+  "minion-small": ["Idle", "Walking_A", "1H_Melee_Attack_Chop", "Hit_A", "Death_A"],
+};
 
 /**
  * Indirilecek varliklar.
@@ -134,8 +163,9 @@ async function download(url, dest) {
 }
 
 /** Kullanilmayan animasyonlari atar (karakter dosyalarinin buyuk kismi budur). */
-async function stripAnimations(src, dst) {
-  await run("node", ["scripts/strip-anims.mjs", src, dst, KEEP_ANIMS], { maxBuffer: 1 << 24 });
+async function stripAnimations(src, dst, name) {
+  const keep = KEEP_ANIMS[name] ?? BASE_ANIMS;
+  await run("node", ["scripts/strip-anims.mjs", src, dst, keep.join(",")], { maxBuffer: 1 << 24 });
 }
 
 async function optimize(src, dst, character) {
@@ -194,7 +224,7 @@ async function main() {
       await cp(source, outFile);
     } else if (item.character) {
       const slim = path.join(TMP, `${item.name}.slim.glb`);
-      await stripAnimations(source, slim);
+      await stripAnimations(source, slim, item.name);
       await optimize(slim, outFile, true);
     } else {
       await optimize(source, outFile, false);

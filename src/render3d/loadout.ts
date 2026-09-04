@@ -6,27 +6,52 @@
  * Kodla uretilen silah/zirh yoktur.
  */
 
-/** Kirpilmis animasyon kutuphanesindeki klip adlari. */
+/**
+ * Kirpilmis animasyon kutuphanesindeki klip adlari.
+ * Hangi modelde hangi klibin bulundugu `scripts/fetch-assets.mjs`
+ * icindeki KEEP_ANIMS listesiyle ayni kalmalidir.
+ */
 export type Clip =
   | "Idle"
   | "Walking_A"
   | "Running_A"
-  | "1H_Melee_Attack_Chop"
-  | "1H_Melee_Attack_Slice_Diagonal"
-  | "2H_Melee_Attack_Chop"
-  | "1H_Ranged_Shoot"
-  | "Spellcast_Shoot"
   | "Hit_A"
   | "Death_A"
-  | "Cheer";
+  | "Cheer"
+  | "1H_Melee_Attack_Chop"
+  | "1H_Melee_Attack_Slice_Horizontal"
+  | "1H_Melee_Attack_Stab"
+  | "2H_Melee_Attack_Chop"
+  | "2H_Melee_Attack_Slice"
+  | "2H_Melee_Attack_Stab"
+  | "2H_Melee_Attack_Spin"
+  | "Dualwield_Melee_Attack_Chop"
+  | "Dualwield_Melee_Attack_Slice"
+  | "Dualwield_Melee_Attack_Stab"
+  | "1H_Ranged_Shoot"
+  | "1H_Ranged_Reload"
+  | "Throw"
+  | "Block"
+  | "Dodge_Forward"
+  | "Dodge_Backward"
+  | "Spellcast_Shoot"
+  | "Spellcast_Raise"
+  | "Spellcast_Long";
+
+/** Yetenek tuslari. */
+export type AbilityKey = "Q" | "W" | "E" | "R";
 
 export interface Loadout {
   /** public/models altindaki dosya adi (uzantisiz). */
   model: string;
   /** Modelde gorunur kalacak ekipman dugumleri. */
   show: string[];
+  /** Normal saldiri. */
   attack: Clip;
+  /** Yetenege ozel klip bulunamazsa kullanilan yedek. */
   cast: Clip;
+  /** Her yetenek tusu icin ayri animasyon. */
+  abilities?: Partial<Record<AbilityKey, Clip>>;
   /** Pelerin/kumas parcalarina uygulanan sampiyon rengi. */
   tint?: number;
   /** Govde boyu carpani (silueti farklilastirmak icin). */
@@ -68,6 +93,13 @@ export const LOADOUTS: Record<string, Loadout> = {
     show: ["2H_Sword", "Knight_Helmet", "Knight_Cape"],
     attack: "2H_Melee_Attack_Chop",
     cast: "Spellcast_Shoot",
+    // Q kavrayici darbe, W tas kalkan, E ileri savurma, R cevresel sarsinti
+    abilities: {
+      Q: "2H_Melee_Attack_Slice",
+      W: "Block",
+      E: "2H_Melee_Attack_Stab",
+      R: "2H_Melee_Attack_Spin",
+    },
     tint: 0x4f7fd0,
     scale: 1.08,
   },
@@ -77,6 +109,13 @@ export const LOADOUTS: Record<string, Loadout> = {
     show: ["2H_Staff", "Mage_Hat", "Mage_Cape"],
     attack: "Spellcast_Shoot",
     cast: "Spellcast_Shoot",
+    // Q hizli buyu, W uzun kanal, E isinlanma, R yukselen buyu
+    abilities: {
+      Q: "Spellcast_Shoot",
+      W: "Spellcast_Long",
+      E: "Dodge_Forward",
+      R: "Spellcast_Raise",
+    },
     tint: 0x6a5bd8,
     scale: 0.96,
   },
@@ -86,14 +125,28 @@ export const LOADOUTS: Record<string, Loadout> = {
     show: ["2H_Crossbow"],
     attack: "1H_Ranged_Shoot",
     cast: "Spellcast_Shoot",
+    // Q ok hazirlama, W avci durusu, E geri sicrama, R guclu atis
+    abilities: {
+      Q: "1H_Ranged_Reload",
+      W: "Cheer",
+      E: "Dodge_Backward",
+      R: "Throw",
+    },
     tint: 0xc08a34,
   },
   // Suikastci — kukuletali iskelet, cift hancer
   golge: {
     model: "monster-rogue",
     show: [],
-    attack: "1H_Melee_Attack_Slice_Diagonal",
-    cast: "Spellcast_Shoot",
+    attack: "Dualwield_Melee_Attack_Slice",
+    cast: "Spellcast_Raise",
+    // Q sicrayan darbe, W sis, E bicak firlatma, R infaz
+    abilities: {
+      Q: "Dualwield_Melee_Attack_Chop",
+      W: "Spellcast_Raise",
+      E: "Throw",
+      R: "Dualwield_Melee_Attack_Stab",
+    },
     tint: 0x5b4ea8,
     scale: 0.96,
     mainHand: "dagger",
@@ -105,7 +158,14 @@ export const LOADOUTS: Record<string, Loadout> = {
     model: "champ-hooded",
     show: ["Rogue_Cape"],
     attack: "Spellcast_Shoot",
-    cast: "Spellcast_Shoot",
+    cast: "Spellcast_Raise",
+    // Q isik huzmesi, W kutsama, E bereket, R uzun kanal
+    abilities: {
+      Q: "Spellcast_Shoot",
+      W: "Spellcast_Raise",
+      E: "Spellcast_Raise",
+      R: "Spellcast_Long",
+    },
     tint: 0xffe4a8,
     scale: 0.94,
     mainHand: "staff",
@@ -118,6 +178,13 @@ export const LOADOUTS: Record<string, Loadout> = {
     show: ["2H_Axe", "Barbarian_Hat", "Barbarian_Cape"],
     attack: "2H_Melee_Attack_Chop",
     cast: "Spellcast_Shoot",
+    // Q atilma, W genis pence, E ulume, R bogazlama
+    abilities: {
+      Q: "Dodge_Forward",
+      W: "2H_Melee_Attack_Slice",
+      E: "Cheer",
+      R: "2H_Melee_Attack_Stab",
+    },
     tint: 0x8c6a3c,
     scale: 1.1,
   },
@@ -127,6 +194,13 @@ export const LOADOUTS: Record<string, Loadout> = {
     show: ["1H_Sword", "Spike_Shield"],
     attack: "1H_Melee_Attack_Chop",
     cast: "Spellcast_Shoot",
+    // Q genis savurma, W kalkan durusu, E girdap, R ileri hamle
+    abilities: {
+      Q: "1H_Melee_Attack_Slice_Horizontal",
+      W: "Block",
+      E: "2H_Melee_Attack_Spin",
+      R: "1H_Melee_Attack_Stab",
+    },
     tint: 0x2f8f9e,
     scale: 1.06,
   },
@@ -136,6 +210,13 @@ export const LOADOUTS: Record<string, Loadout> = {
     show: ["1H_Wand", "Mage_Cape"],
     attack: "Spellcast_Shoot",
     cast: "Spellcast_Shoot",
+    // Q alev topu, W cember, E kor sicramasi, R meteor kanali
+    abilities: {
+      Q: "Spellcast_Shoot",
+      W: "Spellcast_Raise",
+      E: "Dodge_Forward",
+      R: "Spellcast_Long",
+    },
     tint: 0xd45a2c,
     scale: 0.98,
   },
