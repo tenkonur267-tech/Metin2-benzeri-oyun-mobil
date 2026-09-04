@@ -98,15 +98,18 @@ calisan bir uygulama gibi acilir (PWA + servis calisani).
 
 ### 2) Android APK — hazir indirilebilir paket
 Her push'ta `.github/workflows/android.yml` Capacitor + Gradle ile **APK**
-uretir ve `apk-latest` etiketli surume yukler. Telefondan indirme adresi:
+uretir, icerigini dogrular ve `apk-latest` etiketli surume yukler.
 
-```
-https://github.com/tenkonur267-tech/Metin2-benzeri-oyun-mobil/releases/tag/apk-latest
-```
+**Indirme sayfasi:**
+<https://github.com/tenkonur267-tech/Metin2-benzeri-oyun-mobil/releases/tag/apk-latest>
 
 Kurulum: APK'yi telefonuna indir → Android "bilinmeyen kaynaklardan yukleme"
 iznini ver → dosyayi ac. Uygulama tam ekran ve yatay modda acilir, oyun
 sirasinda ekran kapanmaz.
+
+> Depo **ozel (private)** oldugu icin APK'yi indirirken telefonda GitHub
+> hesabinla giris yapmis olman gerekir. Depoyu herkese acik yaparsan link
+> girissiz de calisir.
 
 > Paket **debug** anahtariyla imzalanmistir; dogrudan kurulur ama Google Play'e
 > yuklemek icin kendi imza anahtarinla `assembleRelease` alip imzalaman gerekir.
