@@ -100,7 +100,10 @@ calisan bir uygulama gibi acilir (PWA + servis calisani).
 Her push'ta `.github/workflows/android.yml` Capacitor + Gradle ile **APK**
 uretir, icerigini dogrular ve `apk-latest` etiketli surume yukler.
 
-**Indirme sayfasi:**
+**Dogrudan indirme (baglanti hep ayni kalir):**
+<https://github.com/tenkonur267-tech/Metin2-benzeri-oyun-mobil/releases/download/apk-latest/rift-mobil.apk>
+
+Surum sayfasi:
 <https://github.com/tenkonur267-tech/Metin2-benzeri-oyun-mobil/releases/tag/apk-latest>
 
 Kurulum: APK'yi telefonuna indir → Android "bilinmeyen kaynaklardan yukleme"

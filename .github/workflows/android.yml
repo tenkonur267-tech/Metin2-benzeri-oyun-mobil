@@ -74,11 +74,12 @@ jobs:
       - name: APK'yi adlandir
         id: apk
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          NAME="rift-mobil-${VERSION}-build${GITHUB_RUN_NUMBER}.apk"
+          # Sabit ad: indirme baglantisi her surumde ayni kalir
+          NAME="rift-mobil.apk"
           cp android/app/build/outputs/apk/debug/app-debug.apk "$NAME"
           ls -la "$NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Yapiti yukle
         uses: actions/upload-artifact@v4
@@ -94,7 +95,7 @@ jobs:
         run: |
           set -e
           TAG=apk-latest
-          NOTES="Rift Mobil son APK (yapim #${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA:0:7}).
+          NOTES="Rift Mobil son APK — surum ${{ steps.apk.outputs.version }}, yapim #${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA:0:7}.
 
           Kurulum: APK'yi telefonuna indir, Android \"bilinmeyen kaynaklardan yukleme\" iznini ver ve dosyayi ac.
           Bu bir hata ayiklama (debug) imzali pakettir; Play Store'a yuklemek icin kendi imza anahtarinla yeniden imzalanmalidir."
@@ -107,4 +108,10 @@ jobs:
               --prerelease \
               --target "$GITHUB_SHA"
           fi
+          # Eski yapilardan kalan dosyalari sil, tek ve guncel APK kalsin
+          gh release view "$TAG" --json assets --jq '.assets[].name' \
+            | grep -v '^rift-mobil\.apk$' \
+            | while read -r old; do
+                [ -n "$old" ] && gh release delete-asset "$TAG" "$old" -y || true
+              done
           gh release upload "$TAG" "${{ steps.apk.outputs.name }}" --clobber
