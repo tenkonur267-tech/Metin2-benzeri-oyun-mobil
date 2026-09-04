@@ -78,9 +78,16 @@ export function computeLayout(w: number, h: number): HudLayout {
     minimap: { x: w - mmSize - 8, y: 8, w: mmSize, h: mmSize },
     shop: { x: 34 * s, y: h - 40 * s, r: 22 * s },
     recall: { x: 86 * s, y: h - 40 * s, r: 22 * s },
-    scoreboard: { x: w - mmSize - 34, y: 8 + 22, r: 19 * s },
-    autoToggle: { x: w - mmSize - 34, y: 8 + 22 + 46 * s, r: 19 * s },
-    soundToggle: { x: w - mmSize - 34, y: 8 + 22 + 92 * s, r: 19 * s },
+    // Dar ekranlarda dugmeler minimabin altina, genis ekranlarda soluna gelir
+    scoreboard: narrow
+      ? { x: w - 28 * s, y: mmSize + 34, r: 19 * s }
+      : { x: w - mmSize - 34, y: 8 + 22, r: 19 * s },
+    autoToggle: narrow
+      ? { x: w - 28 * s, y: mmSize + 34 + 46 * s, r: 19 * s }
+      : { x: w - mmSize - 34, y: 8 + 22 + 46 * s, r: 19 * s },
+    soundToggle: narrow
+      ? { x: w - 28 * s, y: mmSize + 34 + 92 * s, r: 19 * s }
+      : { x: w - mmSize - 34, y: 8 + 22 + 92 * s, r: 19 * s },
     joystickZone: { x: 0, y: h * 0.28, w: w * 0.46, h: h * 0.72 },
     joystickHome: { x: 96 * s, y: h - 118 * s, r: 52 * s },
     statusBar: { x: 8, y: 8, w: panelW, h: 56 },

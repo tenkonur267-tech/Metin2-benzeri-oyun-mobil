@@ -555,9 +555,9 @@ export class StructureActor {
       const r = s.radius;
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.5, r * 1.8, r * 0.6, 8), stoneDark);
       pad.position.y = r * 0.3;
-      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(r * 1.15, 0), glowMat);
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(r * 0.95, 0), glowMat);
       crystal.position.y = r * 2.1;
-      crystal.scale.set(1, 1.5, 1);
+      crystal.scale.set(1, 1.35, 1);
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(r * 1.5, r * 0.09, 5, 16),
         accent,
@@ -571,9 +571,9 @@ export class StructureActor {
       const r = s.radius;
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.4, r * 1.7, r * 0.7, 10), stoneDark);
       pad.position.y = r * 0.35;
-      const core = new THREE.Mesh(new THREE.OctahedronGeometry(r * 1.1, 0), glowMat);
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(r * 0.95, 0), glowMat);
       core.position.y = r * 1.9;
-      core.scale.set(1, 1.65, 1);
+      core.scale.set(1, 1.5, 1);
       const shards = new THREE.Group();
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2;
