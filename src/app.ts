@@ -31,6 +31,11 @@ export class App {
   private last = 0;
   private dpr = 1;
 
+  private quality: "low" | "high" = "high";
+  /** Kare suresi ortalamasi (uyarlanabilir kalite icin). */
+  private frameAvg = 1 / 60;
+  private slowTime = 0;
+
   private championId = "kaya";
   private difficulty = 1;
 
@@ -47,9 +52,10 @@ export class App {
     this.view = new World3D(glCanvas);
     this.layout = computeLayout(window.innerWidth, window.innerHeight);
 
-    // Zayif cihazlarda golgeleri kapat
-    const lowEnd = (navigator.hardwareConcurrency ?? 4) <= 4 || window.innerWidth < 700;
-    this.view.setQuality(lowEnd ? "low" : "high");
+    // Zayif cihazlarda golgeleri kapat; ayrica kare hizina gore uyarlanir
+    const lowEnd = (navigator.hardwareConcurrency ?? 4) <= 4;
+    this.quality = lowEnd ? "low" : "high";
+    this.view.setQuality(this.quality);
 
     this.bindEvents();
     try {
@@ -515,6 +521,23 @@ export class App {
     requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, (now - this.last) / 1000 || 0);
     this.last = now;
+
+    // Uyarlanabilir kalite: surekli dusuk FPS'te golgeler kapanir
+    if (dt > 0) {
+      this.frameAvg += (dt - this.frameAvg) * 0.05;
+      if (this.quality === "high" && this.phase === "playing") {
+        if (this.frameAvg > 1 / 34) {
+          this.slowTime += dt;
+          if (this.slowTime > 2.5) {
+            this.quality = "low";
+            this.view.setQuality("low");
+            this.toast("Performans icin gorsel kalite dusuruldu");
+          }
+        } else {
+          this.slowTime = Math.max(0, this.slowTime - dt);
+        }
+      }
+    }
 
     if (this.phase === "playing" && this.world) {
       this.controlPlayer();
