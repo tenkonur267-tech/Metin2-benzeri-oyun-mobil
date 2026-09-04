@@ -116,8 +116,9 @@ export function terrainHeight(x: number, y: number): number {
     }
   }
 
+  // Harita kenari: disari dogru hizla yukselen kayalik sur.
   const edge = Math.min(x, y, MAP_SIZE - x, MAP_SIZE - y);
-  if (edge < EDGE_BAND) h += (EDGE_BAND - edge) * (0.85 / K);
+  if (edge < EDGE_BAND) h += 52 * smooth(EDGE_BAND, EDGE_BAND * 0.12, edge);
 
   // Gecilmez duvarlar: dikdortgenin kendi sinirindan iceri dogru yukselir,
   // boylece disarida yuruyen birimler zemin seviyesinde kalir.
@@ -199,7 +200,7 @@ export const PROP_NAMES = [
   "nat-tree-a", "nat-tree-b", "nat-tree-c", "nat-tree-d", "nat-tree-e", "nat-tree-f",
   "nat-bush-a", "nat-bush-b", "nat-bush-c", "nat-grass-a", "nat-grass-b",
   "nat-rock-a", "nat-rock-b", "nat-stump", "nat-log",
-  // Kayalar
+  // Kayalar ve tepeler
   "rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e",
   "mountain-a", "mountain-b", "mountain-c",
   "waterplant-a", "waterplant-b",
@@ -232,11 +233,26 @@ const ROCK_PALETTE: Record<string, number> = {
   rock: 0x8b9199,
 };
 
+/**
+ * KayKit kaya ve tepe modelleri tek bir "hexagons_medieval" dokusuyla
+ * geliyor ve ekranda bembeyaz duruyordu; ormana uygun koyu gri-kahve
+ * bir kayaya cekilir.
+ */
+const STONE_PALETTE: Record<string, number> = {
+  hexagons_medieval: 0x8b9088,
+};
+
 /** Yapraga gore boyanacak modeller. */
 const NATURE_MODELS = PROP_NAMES.filter((n) => n.startsWith("nat-"));
 
 /** Kaya paletiyle boyanacak modeller. */
 const NATURE_ROCKS = ["nat-rock-a", "nat-rock-b"];
+
+/** Tas paletiyle boyanacak KayKit modelleri. */
+const STONE_MODELS = [
+  "rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e",
+  "mountain-a", "mountain-b", "mountain-c",
+];
 
 export function buildTerrain(props: PropLibrary): TerrainBuild {
   const group = new THREE.Group();
@@ -300,8 +316,12 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   for (const name of NATURE_ROCKS) {
     if (props.has(name)) props.recolor(name, ROCK_PALETTE);
   }
+  for (const name of STONE_MODELS) {
+    if (props.has(name)) props.recolor(name, STONE_PALETTE);
+  }
   const decor = new THREE.Group();
-  decor.add(buildRockWalls(props, rng));
+  decor.add(buildJungleWalls(props, rng));
+  decor.add(buildBorderWall(props, rng));
   decor.add(buildBushClusters(props, rng));
   decor.add(buildForest(props, rng));
   decor.add(buildCamps(props, rng));
@@ -515,6 +535,8 @@ interface Placement {
   x: number;
   y: number;
   scale: number;
+  /** Yalniz dikey olcek (duvar bloklarini uzatmak icin). */
+  scaleY?: number;
   rot: number;
   tiltX?: number;
   tiltZ?: number;
@@ -559,7 +581,7 @@ function instancePlacements(props: PropLibrary, list: Placement[]): THREE.Group 
       e.set(p.tiltX ?? 0, p.rot, p.tiltZ ?? 0, "YXZ");
       q.setFromEuler(e);
       v.set(p.x, terrainHeight(p.x, p.y) - 0.6, p.y);
-      sv.setScalar(p.scale);
+      sv.set(p.scale, p.scaleY ?? p.scale, p.scale);
       m4.compose(v, q, sv);
       for (const im of meshes) im.setMatrixAt(i, m4);
     });
@@ -586,6 +608,11 @@ const BUSHES_MODELS = ["nat-bush-a", "nat-bush-b", "nat-bush-c"];
 const GRASS_MODELS = ["nat-grass-a", "nat-grass-b"];
 const ROCKS = ["rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e", "nat-rock-a", "nat-rock-b"];
 const MOUNTAINS = ["mountain-a", "mountain-b", "mountain-c"];
+/** Duvar eteklerini olusturan kaya bloklari. */
+const CLIFF_BLOCKS = [
+  "mountain-a", "mountain-b", "mountain-c",
+  "rock-single-a", "rock-single-c", "rock-single-e",
+];
 const WATERPLANTS = ["waterplant-a", "waterplant-b"];
 const FOREST_FLOOR = ["nat-stump", "nat-log"];
 
@@ -608,38 +635,109 @@ function place(
 }
 
 /**
- * Gecilmez duvarlar: dikdortgenin uzun ekseni boyunca kaya/tepe dizisi.
- * Duvarin nerede oldugu tek bakista anlasilsin diye siralidir.
+ * Gecilmez orman duvarlari.
+ *
+ * League of Legends / Mobile Legends'daki gibi: duvarin kenari boyunca
+ * kesintisiz bir kayalik yuz, tepesinde ise yesillik. Duvarin kendisi
+ * arazi yuksekligiyle olusur (bkz. `terrainHeight`); burada duvarin
+ * silueti kayalik bloklarla netlestirilir.
  */
-/**
- * Duvar kayaliginin ustunu ve eteklerini susler.
- * Duvarin kendisi arazi yuksekligiyle olusturulur (bkz. `terrainHeight`);
- * burada sadece uzerine cikan agaclar ve dibindeki kayalar eklenir.
- */
-function buildRockWalls(props: PropLibrary, rng: Rng): THREE.Group {
+function buildJungleWalls(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
-  const STEP = 42;
+  /** Kayalik bloklarin genisligi; bu adimla dizilince yan yana kapanir. */
+  const FACE = 19;
+
   for (const w of WALLS) {
-    const nx = Math.max(1, Math.round(w.w / STEP));
-    const ny = Math.max(1, Math.round(w.h / STEP));
+    // --- Kenar yuzu: dikdortgenin cevresini blok blok dolas ---
+    const inset = 5;
+    const x0 = w.x + inset;
+    const y0 = w.y + inset;
+    const x1 = w.x + w.w - inset;
+    const y1 = w.y + w.h - inset;
+    const nx = Math.max(1, Math.round((x1 - x0) / FACE));
+    const ny = Math.max(1, Math.round((y1 - y0) / FACE));
+
+    const edge: Vec2[] = [];
     for (let i = 0; i <= nx; i++) {
-      for (let j = 0; j <= ny; j++) {
-        const x = w.x + (i / nx) * w.w;
-        const y = w.y + (j / ny) * w.h;
-        const deep = wallDepth(x, y) > WALL_SLOPE * 0.9;
-        if (deep) {
-          // Yaylanin ustu: agac ve cali (LoL'deki gibi duvarin ustu yesil)
-          if (rng.chance(0.55)) {
-            list.push(place(props, rng.pick(BROADLEAF), x, y, rng.range(40, 54), rng.range(0, Math.PI * 2)));
-          } else {
-            list.push(place(props, rng.pick(BUSHES_MODELS), x, y, rng.range(12, 18), rng.range(0, Math.PI * 2)));
-          }
-        } else if (rng.chance(0.7)) {
-          // Etek: kaya bloklari kenari sertlestirir
-          list.push(place(props, rng.pick(MOUNTAINS), x, y, rng.range(18, 26), rng.range(0, Math.PI * 2)));
+      const x = x0 + ((x1 - x0) * i) / nx;
+      edge.push({ x, y: y0 }, { x, y: y1 });
+    }
+    for (let j = 1; j < ny; j++) {
+      const y = y0 + ((y1 - y0) * j) / ny;
+      edge.push({ x: x0, y }, { x: x1, y });
+    }
+
+    for (const e of edge) {
+      list.push(place(
+        props, rng.pick(CLIFF_BLOCKS),
+        e.x + rng.range(-3, 3), e.y + rng.range(-3, 3),
+        rng.range(19, 27), rng.range(0, Math.PI * 2),
+      ));
+    }
+
+    // --- Ust yuzey: kayalik kapak + sik yesillik ---
+    const STEP = 34;
+    const mx = Math.max(1, Math.round(w.w / STEP));
+    const my = Math.max(1, Math.round(w.h / STEP));
+    for (let i = 0; i <= mx; i++) {
+      for (let j = 0; j <= my; j++) {
+        const x = w.x + (i / mx) * w.w + rng.range(-6, 6);
+        const y = w.y + (j / my) * w.h + rng.range(-6, 6);
+        if (wallDepth(x, y) < WALL_SLOPE * 0.75) continue;
+        const roll = rng.next();
+        if (roll < 0.42) {
+          list.push(place(props, rng.pick(BROADLEAF), x, y, rng.range(42, 56), rng.range(0, Math.PI * 2)));
+        } else if (roll < 0.66) {
+          list.push(place(props, rng.pick(CONIFER_CLUMPS), x, y, rng.range(38, 50), rng.range(0, Math.PI * 2)));
+        } else {
+          list.push(place(props, rng.pick(BUSHES_MODELS), x, y, rng.range(12, 18), rng.range(0, Math.PI * 2)));
         }
       }
     }
+  }
+  return instancePlacements(props, list);
+}
+
+/**
+ * Haritanin dis siniri.
+ *
+ * Oyun alaninin bittigi yer, arazinin yukselen kenar bandiyla
+ * olusur; burada o bant kayalik ve sik ignelik ormanla kaplanarak
+ * MOBA haritalarindaki gibi kapali bir cerceve haline getirilir.
+ */
+function buildBorderWall(props: PropLibrary, rng: Rng): THREE.Group {
+  const list: Placement[] = [];
+
+  /** Kenardan `inset` kadar iceride, harita cevresini dolasan noktalar. */
+  const ring = (inset: number, step: number, jitter: number): Vec2[] => {
+    const out: Vec2[] = [];
+    const a = inset;
+    const b = MAP_SIZE - inset;
+    const n = Math.max(2, Math.round((b - a) / step));
+    for (let i = 0; i <= n; i++) {
+      const t = a + ((b - a) * i) / n;
+      const j = (): number => rng.range(-jitter, jitter);
+      out.push({ x: t, y: a + j() }, { x: t, y: b + j() }, { x: a + j(), y: t }, { x: b + j(), y: t });
+    }
+    return out;
+  };
+
+  // Ic etek: oyun alanina bakan kesintisiz kaya sirti
+  for (const p of ring(EDGE_BAND * 0.92, 20, 4)) {
+    list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(24, 34), rng.range(0, Math.PI * 2)));
+  }
+  // Sirtin uzerinde ve arkasinda koyu ignelik orman
+  for (const p of ring(EDGE_BAND * 0.62, 26, 8)) {
+    list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(52, 72), rng.range(0, Math.PI * 2)));
+  }
+  for (const p of ring(EDGE_BAND * 0.3, 30, 10)) {
+    if (rng.chance(0.75)) {
+      list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(46, 66), rng.range(0, Math.PI * 2)));
+    }
+  }
+  // En distaki kayalar siluetı kapatir
+  for (const p of ring(EDGE_BAND * 0.1, 28, 8)) {
+    list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(28, 44), rng.range(0, Math.PI * 2)));
   }
   return instancePlacements(props, list);
 }
@@ -677,59 +775,99 @@ function buildBushClusters(props: PropLibrary, rng: Rng): THREE.Group {
   return instancePlacements(props, list);
 }
 
-/** Orman: koridorlardan ve nehirden uzak, seyrek agac obekleri. */
+/**
+ * Orman.
+ *
+ * Agaclar tek tek dagitilmaz; once obek merkezleri secilir, sonra her
+ * obek kendi agac turuyle doldurulur. Boylece koridorlar arasinda
+ * MOBA haritalarindaki gibi sik ve okunakli agaclik olusur.
+ */
 function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
   const taken: Vec2[] = [];
 
   const free = (x: number, y: number, gap: number): boolean => {
-    if (laneDist(x, y) < 62 * K) return false;
-    if (riverDist(x, y) < 52 * K) return false;
+    if (x < EDGE_BAND * 1.15 || y < EDGE_BAND * 1.15) return false;
+    if (x > MAP_SIZE - EDGE_BAND * 1.15 || y > MAP_SIZE - EDGE_BAND * 1.15) return false;
+    if (laneDist(x, y) < 58 * K) return false;
+    if (riverDist(x, y) < 50 * K) return false;
     if (Math.hypot(x - NEXUS_POS[0].x, y - NEXUS_POS[0].y) < 178 * K) return false;
     if (Math.hypot(x - NEXUS_POS[1].x, y - NEXUS_POS[1].y) < 178 * K) return false;
-    if (WALLS.some((w) => x > w.x - 26 && x < w.x + w.w + 26 && y > w.y - 26 && y < w.y + w.h + 26)) return false;
-    if (BUSHES.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 24)) return false;
-    if (CAMPS.some((cm) => Math.hypot(cm.pos.x - x, cm.pos.y - y) < 58 * K)) return false;
+    if (WALLS.some((w) => x > w.x - 22 && x < w.x + w.w + 22 && y > w.y - 22 && y < w.y + w.h + 22)) return false;
+    if (BUSHES.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 22)) return false;
+    if (CAMPS.some((cm) => Math.hypot(cm.pos.x - x, cm.pos.y - y) < 54 * K)) return false;
     return !taken.some((t) => Math.hypot(t.x - x, t.y - y) < gap);
   };
 
-  // Agac sayisi harita alaniyla birlikte artar; agac boyutlari sabit kalir.
-  const treeCount = Math.round(110 * K * K);
-  for (let attempt = 0; attempt < treeCount * 90 && list.length < treeCount; attempt++) {
-    const x = rng.range(36, MAP_SIZE - 36);
-    const y = rng.range(36, MAP_SIZE - 36);
-    if (!free(x, y, 52)) continue;
+  // --- Obek merkezleri ---
+  const groveCount = Math.round(52 * K * K);
+  const groves: Vec2[] = [];
+  for (let a = 0; a < groveCount * 140 && groves.length < groveCount; a++) {
+    const x = rng.range(0, MAP_SIZE);
+    const y = rng.range(0, MAP_SIZE);
+    if (!free(x, y, 96)) continue;
     taken.push({ x, y });
+    groves.push({ x, y });
+  }
+
+  for (const g of groves) {
+    // Her obek tek bir agac ailesinden; siluet boylece toparli kalir.
     const roll = rng.next();
-    if (roll < 0.5) {
-      list.push(place(props, rng.pick(BROADLEAF), x, y, rng.range(46, 64), rng.range(0, Math.PI * 2)));
-    } else if (roll < 0.72) {
-      list.push(place(props, rng.pick(TALL_TREES), x, y, rng.range(56, 74), rng.range(0, Math.PI * 2)));
-    } else {
-      list.push(place(props, rng.pick(CONIFER_CLUMPS), x, y, rng.range(42, 58), rng.range(0, Math.PI * 2)));
+    const family = roll < 0.46 ? BROADLEAF : roll < 0.72 ? CONIFER_CLUMPS : TALL_TREES;
+    const tall = family === TALL_TREES;
+    const radius = rng.range(46, 82);
+    const want = Math.round(rng.range(5, 11));
+
+    for (let i = 0, tries = 0; i < want && tries < want * 30; tries++) {
+      const a = rng.range(0, Math.PI * 2);
+      // Merkeze dogru yogunlasan dagilim
+      const d = radius * Math.sqrt(rng.next()) * 0.95;
+      const x = g.x + Math.cos(a) * d;
+      const y = g.y + Math.sin(a) * d;
+      if (!free(x, y, 30)) continue;
+      taken.push({ x, y });
+      i++;
+      const h = tall ? rng.range(58, 80) : rng.range(44, 66);
+      list.push(place(props, rng.pick(family), x, y, h, rng.range(0, Math.PI * 2)));
     }
-    // Agaclarin dibine cali ve ot
-    if (rng.chance(0.5)) {
-      list.push(place(
-        props, rng.pick(GRASS_MODELS),
-        x + rng.range(-22, 22), y + rng.range(-22, 22),
-        rng.range(7, 12), rng.range(0, Math.PI * 2),
-      ));
-    }
-    if (rng.chance(0.25)) {
-      list.push(place(
-        props, rng.pick(FOREST_FLOOR),
-        x + rng.range(-26, 26), y + rng.range(-26, 26),
-        rng.range(8, 13), rng.range(0, Math.PI * 2),
-      ));
+
+    // Obek eteginde alt bitki ortusu
+    const under = Math.round(rng.range(4, 9));
+    for (let i = 0; i < under; i++) {
+      const a = rng.range(0, Math.PI * 2);
+      const d = radius * rng.range(0.35, 1.15);
+      const x = g.x + Math.cos(a) * d;
+      const y = g.y + Math.sin(a) * d;
+      if (!free(x, y, 14)) continue;
+      taken.push({ x, y });
+      const r = rng.next();
+      if (r < 0.45) {
+        list.push(place(props, rng.pick(GRASS_MODELS), x, y, rng.range(7, 12), rng.range(0, Math.PI * 2)));
+      } else if (r < 0.72) {
+        list.push(place(props, rng.pick(BUSHES_MODELS), x, y, rng.range(10, 15), rng.range(0, Math.PI * 2)));
+      } else if (r < 0.9) {
+        list.push(place(props, rng.pick(FOREST_FLOOR), x, y, rng.range(8, 13), rng.range(0, Math.PI * 2)));
+      } else {
+        list.push(place(props, rng.pick(ROCKS), x, y, rng.range(9, 14), rng.range(0, Math.PI * 2)));
+      }
     }
   }
 
-  // Nehir kiyisina su bitkileri
-  for (let i = 0; i < Math.round(26 * K); i++) {
+  // --- Obekler arasinda tek tuk agac (bosluklari doldurur) ---
+  const loose = Math.round(58 * K * K);
+  for (let a = 0; a < loose * 60 && a < 40000; a++) {
+    const x = rng.range(0, MAP_SIZE);
+    const y = rng.range(0, MAP_SIZE);
+    if (!free(x, y, 58)) continue;
+    taken.push({ x, y });
+    list.push(place(props, rng.pick(BROADLEAF), x, y, rng.range(46, 64), rng.range(0, Math.PI * 2)));
+  }
+
+  // --- Nehir kiyisina su bitkileri ---
+  for (let i = 0; i < Math.round(30 * K); i++) {
     const t = rng.range(120 * K, MAP_SIZE - 120 * K);
     const side = rng.chance(0.5) ? 1 : -1;
-    const off = side * rng.range(26, 40);
+    const off = side * rng.range(26, 42);
     const x = t + off * Math.SQRT1_2;
     const y = t - off * Math.SQRT1_2;
     if (x < 40 || y < 40 || x > MAP_SIZE - 40 || y > MAP_SIZE - 40) continue;

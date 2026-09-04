@@ -16,6 +16,7 @@ export default defineConfig({
       input: {
         main: "index.html",
         props: "props.html",
+        map: "map.html",
       },
     },
   },
