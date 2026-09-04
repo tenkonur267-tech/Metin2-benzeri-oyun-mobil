@@ -249,7 +249,9 @@ export class World3D {
           const dy = y - cy;
           const d = Math.sqrt(dx * dx + dy * dy) / cr;
           if (d > 1) continue;
-          const v = clamp(1.25 - d * 1.25, 0, 1);
+          // League of Legends'daki gibi: gorus dairesinin ici tamamen
+          // acilir, sis yalnizca son %22'lik kusakta yumusakca kapanir.
+          const v = clamp((1 - d) / 0.22, 0, 1);
           const i = y * N + x;
           if (v > this.current[i]) this.current[i] = v;
         }
@@ -260,7 +262,9 @@ export class World3D {
     for (let i = 0; i < data.length; i++) {
       const cur = this.current[i];
       if (cur > this.explored[i]) this.explored[i] = cur;
-      const v = Math.max(cur, this.explored[i] * 0.42);
+      // Kesfedilmis ama su an gorulmeyen yerler: arazi secilir, uzerinde
+      // ince sis kalir.
+      const v = Math.max(cur, this.explored[i] * 0.6);
       data[i] = Math.round(clamp(v, 0, 1) * 255);
     }
     t.visionTexture.needsUpdate = true;

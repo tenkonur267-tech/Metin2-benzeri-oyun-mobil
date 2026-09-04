@@ -176,7 +176,8 @@ export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void
     class: "hint lobby-help",
     html:
       "Sol taraf: hareket cubugu • Sag alt: <span class='kbd'>⚔️</span> saldiri, <span class='kbd'>Q W E R</span> yetenekler<br>" +
-      "Saldiri ve yetenek dugmelerini basili tutup surukleyerek hedef sec, birakinca kullan.",
+      "Sampiyon kendiliginden vurmaz: saldiri tusunu basili tut. Basili tutup " +
+      "surukleyerek hedef secebilirsin.",
   });
 
   side.append(tabs, list, foot, help);

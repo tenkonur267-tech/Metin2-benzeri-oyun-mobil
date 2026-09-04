@@ -414,7 +414,7 @@ export abstract class Unit {
     if (!this.inAttackRange(t)) return;
     this.facing = Math.atan2(t.pos.y - this.pos.y, t.pos.x - this.pos.x);
     this.attackCd = this.attackInterval;
-    this.windup = Math.min(0.28, this.attackInterval * 0.32);
+    this.windup = Math.min(0.19, this.attackInterval * 0.26);
     this.windupTarget = t;
     // Animasyon burada baslar; hasar `windup` kadar sonra, yani salinimin
     // ortasinda iner. Onceden animasyon hasarla ayni anda tetikleniyordu,

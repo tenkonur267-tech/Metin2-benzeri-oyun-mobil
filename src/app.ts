@@ -256,7 +256,7 @@ export class App {
     }
     if (inCircle(L.autoToggle, p.x, p.y, 8)) {
       ui.autoAttack = !ui.autoAttack;
-      this.toast(ui.autoAttack ? "Otomatik saldiri: ACIK" : "Otomatik saldiri: KAPALI");
+      this.toast(ui.autoAttack ? "Otomatik hedef: ACIK" : "Otomatik hedef: KAPALI");
       return;
     }
     if (inCircle(L.soundToggle, p.x, p.y, 8)) {
@@ -431,19 +431,28 @@ export class App {
     const reach = p.stats.attackRange + p.radius;
     let target: Unit | null = this.forcedTarget;
     if (target && (!target.alive || dist(target.pos, p.pos) > reach + 220)) target = null;
-    if (!target && ui.autoAttack) target = this.nearestAutoTarget(reach + 24);
+    // Otomatik hedef: saldiri tusuna basildiginda (veya basiliyken hedef
+    // olunce) en uygun dusmani kendiliginden secer.
+    if (!target && ui.autoAttack && this.attackHeld) target = this.nearestAutoTarget(reach + 24);
     if (target && !target.alive) target = null;
     this.forcedTarget = target;
-    p.target = target && dist(target.pos, p.pos) <= reach + target.radius + 12 ? target : null;
 
-    if (this.attackHeld && target && !ui.joystick.active) {
-      const d = dist(p.pos, target.pos);
-      const stop = reach + target.radius - 4;
-      if (d > stop) {
-        const dir = norm({ x: target.pos.x - p.pos.x, y: target.pos.y - p.pos.y });
-        p.path = [{ x: p.pos.x + dir.x * 60, y: p.pos.y + dir.y * 60 }];
-      } else {
-        p.path.length = 0;
+    // Wild Rift'teki gibi: saldiri tusuna basilmadan vurulmaz.
+    // Onceden menzile giren her dusmana kendiliginden vuruyordu.
+    p.target = null;
+
+    if (this.attackHeld && target) {
+      // Yon cubugu kullanilmiyorsa hedefe dogru yuru; kullaniliyorsa
+      // hareketi oyuncu yonetir ama menzildeyken vurus yine calisir.
+      if (!ui.joystick.active) {
+        const d = dist(p.pos, target.pos);
+        const stop = reach + target.radius - 4;
+        if (d > stop) {
+          const dir = norm({ x: target.pos.x - p.pos.x, y: target.pos.y - p.pos.y });
+          p.path = [{ x: p.pos.x + dir.x * 60, y: p.pos.y + dir.y * 60 }];
+        } else {
+          p.path.length = 0;
+        }
       }
       p.target = target;
     }
