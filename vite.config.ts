@@ -12,10 +12,11 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: false,
     rollupOptions: {
-      // Oyun + gelistirici sprite galerisi
+      // Oyun + gelistirici galerileri
       input: {
         main: "index.html",
         models: "models.html",
+        props: "props.html",
       },
     },
   },

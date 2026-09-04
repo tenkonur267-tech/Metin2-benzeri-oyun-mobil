@@ -6,12 +6,19 @@ import * as THREE from "three";
 import { clamp, type Vec2 } from "../core/math";
 import { MAP_SIZE } from "../game/constants";
 import type { World } from "../game/world";
-import { ChampionActor, MinionField, MonsterActor, StructureActor } from "./actors";
+import { ChampionActor, MinionField, MonsterActor, STRUCTURE_PROPS, StructureActor } from "./actors";
 import { AimIndicator, Fx3D } from "./fx3d";
 import { loadModel, type LoadedModel } from "./assets";
 import { Stage } from "./scene";
 import { buildPortraits } from "./portrait3d";
-import { buildTerrain, terrainHeight, type TerrainBuild } from "./terrain";
+import {
+  PROP_NAMES,
+  applyVisionToProps,
+  buildTerrain,
+  terrainHeight,
+  type TerrainBuild,
+} from "./terrain";
+import { PropLibrary } from "./props";
 
 export class World3D {
   readonly stage: Stage;
@@ -19,6 +26,7 @@ export class World3D {
   readonly aim = new AimIndicator();
 
   private terrain: TerrainBuild | null = null;
+  private props = new PropLibrary();
   private champModel: LoadedModel | null = null;
   private beastModel: LoadedModel | null = null;
 
@@ -46,10 +54,16 @@ export class World3D {
 
   /** Modelleri ve araziyi hazirlar. */
   async prepare(onProgress?: (msg: string) => void): Promise<void> {
+    onProgress?.("Harita modelleri yukleniyor...");
+    const names = [...new Set([...PROP_NAMES, ...STRUCTURE_PROPS])];
+    await this.props.load(names, (done, total) => {
+      onProgress?.(`Harita modelleri yukleniyor... ${done}/${total}`);
+    });
     onProgress?.("Arazi olusturuluyor...");
-    this.terrain = buildTerrain();
+    this.terrain = buildTerrain(this.props);
+    applyVisionToProps(this.terrain.decor, this.terrain.visionTexture);
     this.stage.scene.add(this.terrain.group);
-    onProgress?.("Modeller yukleniyor...");
+    onProgress?.("Karakter modelleri yukleniyor...");
     const [champ, beast] = await Promise.all([loadModel("champion.glb"), loadModel("beast.glb")]);
     this.champModel = champ;
     this.beastModel = beast;
@@ -78,7 +92,7 @@ export class World3D {
       this.matchGroup.add(a.root);
     }
     for (const s of world.structures) {
-      const a = new StructureActor(s);
+      const a = new StructureActor(s, this.props);
       this.structures.set(s.id, a);
       this.matchGroup.add(a.root);
     }

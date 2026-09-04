@@ -4,6 +4,7 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 export interface LoadedModel {
@@ -15,6 +16,16 @@ export interface LoadedModel {
 
 const cache = new Map<string, Promise<LoadedModel>>();
 
+/** Modeller meshopt ile sikistirilmistir; cozucu tek sefer kurulur. */
+let loader: GLTFLoader | null = null;
+function gltfLoader(): GLTFLoader {
+  if (!loader) {
+    loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }
+  return loader;
+}
+
 function base(): string {
   const b = (import.meta.env && import.meta.env.BASE_URL) || "/";
   return b.endsWith("/") ? b : `${b}/`;
@@ -24,7 +35,7 @@ export function loadModel(file: string): Promise<LoadedModel> {
   const hit = cache.get(file);
   if (hit) return hit;
   const p = new Promise<LoadedModel>((resolve, reject) => {
-    new GLTFLoader().load(
+    gltfLoader().load(
       `${base()}models/${file}`,
       (gltf) => {
         const box = new THREE.Box3().setFromObject(gltf.scene);

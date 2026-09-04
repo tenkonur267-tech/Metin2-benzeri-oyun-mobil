@@ -4,7 +4,7 @@
  * - Sampiyonlar: CC0 iskeletli model + prosedurel ekipman + animasyon makinesi
  * - Minyonlar: birlestirilmis dusuk poligonlu mesh, InstancedMesh ile cizilir
  * - Canavarlar: CC0 hayvan modeli, kampa gore boyanip olceklenir
- * - Yapilar: tamamen prosedurel (kule, engelleyici, ana bina)
+ * - Yapilar: hazir tas modeller (dikilitas, turbe) + takim kristali
  */
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -15,6 +15,7 @@ import type { Minion, Monster, Structure } from "../game/units";
 import { championModel, creatureModel, type CharModel } from "../render/models";
 import { instantiate, findBone, tintAll, tintByMaterialName, type LoadedModel } from "./assets";
 import { buildCape, buildHeadgear, buildOffhand, buildTeamRing, buildWeapon, colorOf } from "./gear";
+import type { PropLibrary } from "./props";
 import { terrainHeight } from "./terrain";
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -502,21 +503,21 @@ export class MonsterActor {
 // Yapilar
 // ---------------------------------------------------------------------------
 
+/** Yapilarda kullanilan hazir modeller. */
+export const STRUCTURE_PROPS = ["tower", "tower-2", "inhibitor", "nexus", "rock-3", "rock-4"];
+
 export class StructureActor {
   readonly root = new THREE.Group();
-  private turret: THREE.Object3D | null = null;
+  private body: THREE.Object3D | null = null;
   private crystal: THREE.Object3D | null = null;
   private glow: THREE.Mesh | null = null;
   private rubble: THREE.Object3D | null = null;
   private alivePart = new THREE.Group();
+  private baseY = 0;
 
-  constructor(readonly s: Structure) {
-    const team = s.team;
-    const col = colorOf(TEAM_COLORS[team]);
-    const dark = colorOf(TEAM_COLORS_DARK[team]);
-    const stone = new THREE.MeshStandardMaterial({ color: 0x6b7683, roughness: 0.85, flatShading: true });
-    const stoneDark = new THREE.MeshStandardMaterial({ color: 0x434e5a, roughness: 0.9, flatShading: true });
-    const accent = new THREE.MeshStandardMaterial({ color: dark, roughness: 0.6, metalness: 0.2 });
+  constructor(readonly s: Structure, props: PropLibrary) {
+    const col = colorOf(TEAM_COLORS[s.team]);
+    const dark = colorOf(TEAM_COLORS_DARK[s.team]);
     const glowMat = new THREE.MeshStandardMaterial({
       color: col,
       emissive: col,
@@ -525,68 +526,38 @@ export class StructureActor {
     });
 
     this.root.add(this.alivePart);
+    const r = s.radius;
 
+    // --- Hazir model govdesi ---
+    let name: string;
+    let height: number;
     if (s.kind === "tower") {
-      const r = s.radius;
-      const h = r * (3.4 + s.tier * 0.35);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.5, r * 1.9, r * 0.9, 8), stoneDark);
-      base.position.y = r * 0.45;
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 1.05, h, 8), stone);
-      shaft.position.y = r * 0.9 + h / 2;
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r * 0.9, r * 0.5, 8), accent);
-      band.position.y = r * 0.9 + h * 0.62;
-      const crown = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.15, r * 0.85, r * 0.7, 8), stone);
-      crown.position.y = r * 0.9 + h + r * 0.2;
-
-      const turret = new THREE.Group();
-      const headMesh = new THREE.Mesh(new THREE.BoxGeometry(r * 1.1, r * 0.8, r * 1.6), accent);
-      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.22, r * 0.26, r * 1.6, 6), stoneDark);
-      barrel.rotation.x = Math.PI / 2;
-      barrel.position.z = r * 1.2;
-      const eye = new THREE.Mesh(new THREE.IcosahedronGeometry(r * 0.42, 1), glowMat);
-      eye.position.set(0, r * 0.55, 0);
-      turret.add(headMesh, barrel, eye);
-      turret.position.y = r * 0.9 + h + r * 0.75;
-      this.turret = turret;
-      this.glow = eye;
-
-      this.alivePart.add(base, shaft, band, crown, turret);
+      name = s.tier >= 3 ? "tower-2" : "tower";
+      height = r * (4.4 + s.tier * 0.4);
     } else if (s.kind === "inhibitor") {
-      const r = s.radius;
-      const pad = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.5, r * 1.8, r * 0.6, 8), stoneDark);
-      pad.position.y = r * 0.3;
-      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(r * 0.95, 0), glowMat);
-      crystal.position.y = r * 2.1;
-      crystal.scale.set(1, 1.35, 1);
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(r * 1.5, r * 0.09, 5, 16),
-        accent,
-      );
-      ring.position.y = r * 2.1;
-      ring.rotation.x = Math.PI / 2;
-      this.crystal = crystal;
-      this.glow = crystal;
-      this.alivePart.add(pad, crystal, ring);
+      name = "inhibitor";
+      height = r * 3.1;
     } else {
-      const r = s.radius;
-      const pad = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.4, r * 1.7, r * 0.7, 10), stoneDark);
-      pad.position.y = r * 0.35;
-      const core = new THREE.Mesh(new THREE.OctahedronGeometry(r * 0.95, 0), glowMat);
-      core.position.y = r * 1.9;
-      core.scale.set(1, 1.5, 1);
-      const shards = new THREE.Group();
-      for (let i = 0; i < 4; i++) {
-        const a = (i / 4) * Math.PI * 2;
-        const sh = new THREE.Mesh(new THREE.OctahedronGeometry(r * 0.3, 0), glowMat);
-        sh.position.set(Math.cos(a) * r * 1.7, r * 1.6, Math.sin(a) * r * 1.7);
-        shards.add(sh);
-      }
-      shards.position.y = 0;
-      this.crystal = core;
-      this.glow = core;
-      this.alivePart.add(pad, core, shards);
-      (this.root as THREE.Group & { shards?: THREE.Group }).shards = shards;
+      name = "nexus";
+      height = r * 3.4;
     }
+    const body = props.clone(name, height);
+    body.rotation.y = s.kind === "tower" ? 0 : (s.team === 0 ? Math.PI * 0.25 : Math.PI * 1.25);
+    tintTowardTeam(body, dark);
+    this.body = body;
+    this.alivePart.add(body);
+    this.baseY = height;
+
+    // --- Takim kristali (hedef ve takim gostergesi) ---
+    const crystal = new THREE.Mesh(
+      new THREE.OctahedronGeometry(r * (s.kind === "tower" ? 0.3 : 0.6), 0),
+      glowMat,
+    );
+    crystal.scale.set(1, 1.4, 1);
+    crystal.position.y = height + r * (s.kind === "tower" ? 0.5 : 0.75);
+    this.crystal = crystal;
+    this.glow = crystal;
+    this.alivePart.add(crystal);
 
     this.alivePart.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -596,18 +567,14 @@ export class StructureActor {
       }
     });
 
-    // Yikilmis hali
+    // --- Yikilmis hali: hazir kaya modelleri ---
     const rubble = new THREE.Group();
-    const rubMat = new THREE.MeshStandardMaterial({ color: 0x3a424c, roughness: 0.95, flatShading: true });
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 + s.id;
-      const chunk = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(s.radius * (0.3 + (i % 3) * 0.14), 0),
-        rubMat,
-      );
-      chunk.position.set(Math.cos(a) * s.radius * 0.9, s.radius * 0.2, Math.sin(a) * s.radius * 0.9);
-      chunk.rotation.set(i, i * 1.3, i * 0.7);
-      chunk.castShadow = true;
+      const chunk = props.clone(i % 2 === 0 ? "rock-3" : "rock-4", r * (0.5 + (i % 3) * 0.2));
+      chunk.position.set(Math.cos(a) * r * 0.85, 0, Math.sin(a) * r * 0.85);
+      chunk.rotation.y = i * 1.3;
+      tintTowardTeam(chunk, 0x4a4f56);
       rubble.add(chunk);
     }
     rubble.visible = false;
@@ -623,27 +590,35 @@ export class StructureActor {
     if (this.rubble) this.rubble.visible = !s.alive;
     if (!s.alive) return;
 
-    if (this.turret) {
-      const t = s.target;
-      const yaw = t ? facingToYaw(Math.atan2(t.pos.y - s.pos.y, t.pos.x - s.pos.x)) : Math.sin(time * 0.4 + s.id) * 0.8;
-      this.turret.rotation.y += (yaw - this.turret.rotation.y) * 0.2;
+    if (this.body && s.kind === "tower") {
+      // Saldiri sirasinda hafif geri tepme
       const recoil = clamp(s.swing / 0.24, 0, 1);
-      this.turret.position.z = -recoil * s.radius * 0.35;
+      this.body.position.y = -recoil * s.radius * 0.12;
     }
     if (this.crystal) {
       this.crystal.rotation.y = time * 0.8;
-      this.crystal.position.y +=
-        (this.s.radius * (this.s.kind === "nexus" ? 1.9 : 2.1) +
-          Math.sin(time * 1.4) * this.s.radius * 0.12 -
-          this.crystal.position.y) * 0.2;
+      const rest = this.baseY + s.radius * (s.kind === "tower" ? 0.5 : 0.75);
+      this.crystal.position.y += (rest + Math.sin(time * 1.4) * s.radius * 0.12 - this.crystal.position.y) * 0.2;
     }
-    const shards = (this.root as THREE.Group & { shards?: THREE.Group }).shards;
-    if (shards) shards.rotation.y = time * 0.5;
 
     if (this.glow) {
-      const m = (this.glow as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      const m = this.glow.material as THREE.MeshStandardMaterial;
       const dim = s.invulnerable ? 0.5 : 1;
       m.emissiveIntensity = (1.2 + 0.5 * Math.sin(time * 3 + s.id)) * dim;
     }
   }
+}
+
+/** Hazir modelin tas rengini takim rengine dogru kaydirir. */
+function tintTowardTeam(root: THREE.Object3D, hex: number): void {
+  const tint = new THREE.Color(hex);
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || !m.material) return;
+    const list = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of list) {
+      const std = mat as THREE.MeshStandardMaterial;
+      if (std.color) std.color.lerp(tint, 0.42);
+    }
+  });
 }
