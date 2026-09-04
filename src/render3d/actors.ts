@@ -49,6 +49,31 @@ const BASE_CLIPS: Record<AnimName, Clip> = {
  */
 export const KAYKIT_HEIGHT = 1.75;
 
+/** Sampiyon boyu = yaricap x bu carpan (oyun birimi). */
+const CHAMPION_HEIGHT = 2.55;
+
+/**
+ * Hazir bir silahi el kemigine takar.
+ *
+ * Kemik, govde olcegini de tasidigi icin dogrudan eklenen nesne o olcekle
+ * carpilir ve devlesir; burada kemigin dunya olcegi geri alinir, boylece
+ * silah `clone()` ile verilen gercek boyunda kalir.
+ */
+function attachToHand(body: THREE.Object3D, boneName: string, gear: THREE.Object3D): void {
+  const bone = findBone(body, boneName);
+  if (!bone) {
+    body.add(gear);
+    return;
+  }
+  bone.updateWorldMatrix(true, false);
+  const ws = new THREE.Vector3();
+  bone.getWorldScale(ws);
+  const holder = new THREE.Object3D();
+  holder.scale.setScalar(ws.x > 1e-6 ? 1 / ws.x : 1);
+  holder.add(gear);
+  bone.add(holder);
+}
+
 export class ChampionActor {
   readonly root = new THREE.Group();
   private body: THREE.Group;
@@ -69,11 +94,11 @@ export class ChampionActor {
     readonly champ: Champion,
     model: LoadedModel,
     loadout: Loadout,
+    props: PropLibrary,
     isPlayer: boolean,
   ) {
     const def: CharModel = championModel(champ.def.id);
-    const buildScale = def.build === "heavy" ? 1.08 : def.build === "slim" ? 0.94 : 1;
-    const target = champ.radius * 3.4 * buildScale;
+    const target = champ.radius * CHAMPION_HEIGHT * (loadout.scale ?? 1);
     this.bodyHeight = target;
 
     this.body = instantiate(model);
@@ -88,6 +113,15 @@ export class ChampionActor {
       if (node) node.visible = show.has(name);
     }
     this.cape = findNode(this.body, `${loadout.model.replace("champ-", "")}_Cape`);
+
+    // Modelde hazir silahi olmayan sampiyonlara disaridan silah takilir
+    const handHeight = target * (loadout.handScale ?? 0.5);
+    if (loadout.mainHand && props.has(loadout.mainHand)) {
+      attachToHand(this.body, "handslot.r", props.clone(loadout.mainHand, handHeight));
+    }
+    if (loadout.offHand && props.has(loadout.offHand)) {
+      attachToHand(this.body, "handslot.l", props.clone(loadout.offHand, handHeight * 0.34));
+    }
 
     // Govde parcalari tek mesh'te birlestirilir (10 cizim cagrisi -> 1)
     mergeSkinned(this.body);
@@ -309,10 +343,7 @@ class MinionActor {
 
     mergeSkinned(this.body);
 
-    if (weapon) {
-      const bone = findBone(this.body, "handslot.r");
-      (bone ?? this.body).add(weapon);
-    }
+    if (weapon) attachToHand(this.body, "handslot.r", weapon);
 
     this.body.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -410,10 +441,10 @@ export class MinionField {
 
 /** Minyon turune gore oyun birimi cinsinden boy. */
 const MINION_HEIGHT: Record<Minion["minionKind"], number> = {
-  melee: 17,
-  caster: 16,
-  cannon: 20,
-  super: 24,
+  melee: 13,
+  caster: 12.5,
+  cannon: 15,
+  super: 18,
 };
 
 // ---------------------------------------------------------------------------
@@ -433,7 +464,7 @@ export class MonsterActor {
   ) {
     const cm = creatureModel(monster.spec.name);
     this.body = instantiate(model);
-    const target = monster.radius * (monster.spec.epic ? 3.4 : 2.3);
+    const target = monster.radius * (monster.spec.epic ? 2.6 : 1.8);
     this.body.scale.setScalar(target / KAYKIT_HEIGHT);
     tintAll(this.body, colorOf(cm.body), monster.spec.epic ? colorOf(cm.accent) : 0x000000, 0.35);
     if (monster.spec.epic) {

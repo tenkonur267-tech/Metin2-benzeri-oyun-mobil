@@ -21,6 +21,7 @@ import {
 import { PropLibrary } from "./props";
 import {
   CHAMPION_MODEL_FILES,
+  CHAMPION_WEAPONS,
   MINION_MODELS,
   MINION_WEAPONS,
   MONSTER_MODELS,
@@ -63,7 +64,10 @@ export class World3D {
   /** Modelleri ve araziyi hazirlar. */
   async prepare(onProgress?: (msg: string) => void): Promise<void> {
     onProgress?.("Harita modelleri yukleniyor...");
-    const names = [...new Set([...PROP_NAMES, ...STRUCTURE_PROPS, ...BASE_PROPS, ...Object.values(MINION_WEAPONS)])];
+    const names = [...new Set([
+      ...PROP_NAMES, ...STRUCTURE_PROPS, ...BASE_PROPS,
+      ...Object.values(MINION_WEAPONS), ...CHAMPION_WEAPONS,
+    ])];
     await this.props.load(names, (done, total) => {
       onProgress?.(`Harita modelleri yukleniyor... ${done}/${total}`);
     });
@@ -97,7 +101,8 @@ export class World3D {
     const out = new Map<string, THREE.Object3D>();
     for (const name of new Set(Object.values(MINION_WEAPONS))) {
       if (!this.props.has(name)) continue;
-      out.set(name, this.props.clone(name, 6));
+      // Minyon boyunun yaklasik yarisi kadar (dunya birimi)
+      out.set(name, this.props.clone(name, 8));
     }
     return out;
   }
@@ -115,7 +120,7 @@ export class World3D {
       const lo = loadoutOf(c.def.id);
       const model = this.characters.get(lo.model);
       if (!model) continue;
-      const a = new ChampionActor(c, model, lo, c.isPlayer);
+      const a = new ChampionActor(c, model, lo, this.props, c.isPlayer);
       this.champions.set(c.id, a);
       this.matchGroup.add(a.root);
     }
