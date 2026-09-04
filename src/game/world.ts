@@ -445,18 +445,34 @@ export class World {
     }
   }
 
+  /**
+   * Altin ve tecrube minyon oldugunde dagitilir.
+   *
+   * Son vurusu bir minyon veya kule yapmis olsa bile altin, minyona
+   * en son vuran sampiyona gider (`CREDIT_WINDOW` icinde vurmussa).
+   * Boylece altin hicbir zaman "kaybolmaz" ve minyonlara gitmez.
+   */
   private grantMinionRewards(m: Minion, killer: Unit | null): void {
     const gold = m.goldValue();
     const xp = m.xpValue();
-    // Altin sadece son vurusu yapan sampiyona
-    if (killer && killer.kind === "champion") {
-      const c = killer as Champion;
-      c.addGold(gold);
-      c.cs++;
-      this.teams[c.team].gold += gold;
-      this.fx.goldNumber(m.pos, gold);
-      if (c.isPlayer) sfx.play("coin");
+
+    /** Son vurusu sampiyona baglamak icin sure penceresi (saniye). */
+    const CREDIT_WINDOW = 8;
+    let credit: Champion | null =
+      killer && killer.kind === "champion" ? (killer as Champion) : null;
+    if (!credit && m.lastChampionHitAgo <= CREDIT_WINDOW) {
+      const u = this.getUnit(m.lastChampionHit);
+      if (u && u.kind === "champion" && u.team !== m.team) credit = u as Champion;
     }
+
+    if (credit) {
+      credit.addGold(gold);
+      credit.cs++;
+      this.teams[credit.team].gold += gold;
+      this.fx.goldNumber(m.pos, gold);
+      if (credit.isPlayer) sfx.play("coin");
+    }
+
     // Tecrube cevredeki tum dusman sampiyonlara paylastirilir
     const nearby = this.champions.filter(
       (c) => c.alive && c.team !== m.team && dist(c.pos, m.pos) < 240,
@@ -465,6 +481,8 @@ export class World {
       const share = xp / Math.max(1, nearby.length * 0.75);
       for (const c of nearby) c.gainXp(this, share);
     }
+    // Son vurus odulu: minyonu kesen sampiyon ek tecrube alir
+    if (credit && credit.alive) credit.gainXp(this, xp * CONFIG.lastHitXpBonus);
   }
 
   private grantMonsterRewards(mo: Monster, killer: Unit | null): void {

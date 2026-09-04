@@ -91,6 +91,16 @@ export function wallDepth(x: number, y: number): number {
   return best;
 }
 
+/**
+ * Nehrin gorunurlugu: koridorlarda 0, ormanda 1.
+ *
+ * Su yalnizca ormanda aksin diye hem arazi cukuru hem su yuzeyi
+ * bu maskeyle kesilir.
+ */
+export function riverMask(x: number, y: number): number {
+  return smooth(LANE_HALF * 0.9, LANE_FADE * 1.25, laneDist(x, y));
+}
+
 /** Duvar kayaliginin yuksekligi ve kenar egiminin genisligi. */
 const WALL_HEIGHT = 34;
 const WALL_SLOPE = 26;
@@ -102,10 +112,14 @@ export function terrainHeight(x: number, y: number): number {
   const jungle = 7 + noise2(x, y) * 5 + Math.sin(x * 0.017) * 1.6 + Math.cos(y * 0.019) * 1.6;
   let h = jungle * laneT;
 
+  // Nehir yatagi. Koridorlarin gectigi yerde cukur kapanir; su da
+  // orada cizilmez, boylece koridor kuru bir gecit olarak kalir.
   const dr = riverDist(x, y);
   if (dr < RIVER_FADE) {
     const riverT = smooth(RIVER_HALF, RIVER_FADE, dr);
-    h = -5 * (1 - riverT) + h * riverT;
+    const dry = 1 - riverMask(x, y);
+    const carve = riverT + (1 - riverT) * dry;
+    h = -5 * (1 - carve) + h * carve;
   }
 
   for (const team of [0, 1] as const) {
@@ -151,7 +165,8 @@ function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3
 
   color.copy(C_GRASS).lerp(C_GRASS_DARK, n * 0.55);
   color.lerp(C_LANE, 1 - laneT);
-  color.lerp(C_RIVER, 1 - riverT);
+  // Nehir boyasi da koridorda kesilir; gecit kuru toprak kalir
+  color.lerp(C_RIVER, (1 - riverT) * riverMask(x, y));
   for (const team of [0, 1] as const) {
     const p = NEXUS_POS[team];
     const d = Math.hypot(x - p.x, y - p.y);
@@ -314,12 +329,26 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   // --- Nehir ---
   const waterMat = makeWaterMaterial();
   // Kosegen boyu: kare haritayi tam kat eder, disari tasmaz
-  const waterGeo = new THREE.PlaneGeometry(MAP_SIZE * Math.SQRT2, 132 * K, 48, 8);
+  const waterGeo = new THREE.PlaneGeometry(MAP_SIZE * Math.SQRT2, 132 * K, 240, 8);
   waterGeo.rotateX(-Math.PI / 2);
   const water = new THREE.Mesh(waterGeo, waterMat);
   water.position.set(MAP_SIZE / 2, -1.0, MAP_SIZE / 2);
   water.rotation.y = -Math.PI / 4;
   water.renderOrder = 1;
+
+  // Koridor maskesi: her kosenin dunya konumundan hesaplanir, koridorda
+  // su tamamen seffaflasir
+  water.updateMatrixWorld(true);
+  {
+    const pos = waterGeo.attributes.position as THREE.BufferAttribute;
+    const mask = new Float32Array(pos.count);
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(water.matrixWorld);
+      mask[i] = riverMask(v.x, v.z);
+    }
+    waterGeo.setAttribute("aRiver", new THREE.BufferAttribute(mask, 1));
+  }
   group.add(water);
 
   // --- Hazir modellerle dekor ---
@@ -458,15 +487,19 @@ export function makeWaterMaterial(): THREE.ShaderMaterial {
       uFoam: { value: new THREE.Color(0xcfe3e2) },
     },
     vertexShader: `
+      attribute float aRiver;
+      varying float vRiver;
       varying vec2 vUv;
       varying vec3 vWorld;
       void main() {
         vUv = uv;
+        vRiver = aRiver;
         vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
+      varying float vRiver;
       varying vec2 vUv;
       varying vec3 vWorld;
       uniform float uTime;
@@ -508,6 +541,9 @@ export function makeWaterMaterial(): THREE.ShaderMaterial {
         float alpha = mix(0.90, 0.55, smoothstep(0.45, 1.0, bank));
         // Nehrin uclari harita kosesinde yumusakca biter
         alpha *= smoothstep(0.0, 0.035, vUv.x) * smoothstep(1.0, 0.965, vUv.x);
+        // Koridorlarda su cizilmez: nehir yalnizca ormanda akar
+        alpha *= vRiver;
+        if (alpha < 0.004) discard;
         gl_FragColor = vec4(col, alpha);
       }
     `,

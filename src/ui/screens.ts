@@ -385,6 +385,41 @@ export function showShop(root: HTMLElement, p: Champion, onClose: () => void): v
   const inv = el("div", { class: "inv-row" });
   const grid = el("div", { class: "item-grid" });
 
+  /**
+   * Sampiyonun o anki degerleri.
+   *
+   * Esya alindiginda hangi degerin ne kadar degistigi gorulsun diye
+   * magazada canli gosterilir.
+   */
+  const statPanel = el("div", { class: "stat-panel" });
+  const paintStats = (): void => {
+    const s = p.stats;
+    const rows: [string, string][] = [
+      ["Can", `${Math.round(s.maxHp)}`],
+      ["Mana", `${Math.round(s.maxMp)}`],
+      ["Saldiri gucu", `${Math.round(s.ad)}`],
+      ["Yetenek gucu", `${Math.round(s.ap)}`],
+      ["Zirh", `${Math.round(s.armor)}`],
+      ["Buyu direnci", `${Math.round(s.mr)}`],
+      ["Saldiri hizi", `${s.attackSpeed.toFixed(2)}/sn`],
+      ["Hareket hizi", `${Math.round(s.moveSpeed)}`],
+      ["Kritik", `%${Math.round(s.crit * 100)}`],
+      ["Can calma", `%${Math.round(s.lifesteal * 100)}`],
+      ["Yetenek hizi", `${Math.round(s.abilityHaste)}`],
+      ["Zirh delme", `${Math.round(s.armorPen)}`],
+      ["Buyu delme", `${Math.round(s.magicPen)}`],
+      ["Sarsilmazlik", `%${Math.round(s.tenacity * 100)}`],
+      ["Can yenilenmesi", `${s.hpRegen.toFixed(1)}/sn`],
+      ["Mana yenilenmesi", `${s.mpRegen.toFixed(1)}/sn`],
+    ];
+    clear(statPanel);
+    for (const [name, value] of rows) {
+      statPanel.append(
+        el("div", { class: "stat-cell" }, el("span", {}, name), el("b", {}, value)),
+      );
+    }
+  };
+
   const refresh = (): void => {
     goldLabel.textContent = `⛁ ${Math.floor(p.gold)}`;
     clear(inv);
@@ -400,6 +435,7 @@ export function showShop(root: HTMLElement, p: Champion, onClose: () => void): v
       }
       inv.append(slot);
     }
+    paintStats();
     clear(grid);
     for (const item of ITEMS) {
       const can = p.canBuy(item);
@@ -427,7 +463,13 @@ export function showShop(root: HTMLElement, p: Champion, onClose: () => void): v
 
   const scroll = el("div", { class: "scroll" });
   scroll.append(grid);
-  screen.append(head, el("div", { class: "hint" }, "Envanter (dokunarak sat):"), inv, scroll);
+  screen.append(
+    head,
+    el("div", { class: "hint" }, "Envanter (dokunarak sat):"),
+    inv,
+    statPanel,
+    scroll,
+  );
   root.append(screen);
 }
 
@@ -458,7 +500,8 @@ export function showScoreboard(
       el(
         "div",
         { style: "margin:8px 0 4px;font-weight:700", class: team === 0 ? "team-blue" : "team-red" },
-        `${TEAM_NAMES[team]} Takim — ${t.kills} kill • ${t.towers} kule • 🐉${t.dragons}`,
+        `${TEAM_NAMES[team]} Takim — ${t.kills} kill • ${t.towers} kule • 🐉${t.dragons} • ` +
+          `${world.champions.filter((x) => x.team === team).reduce((n, x) => n + x.cs, 0)} minyon`,
       ),
     );
     const table = el("table", { class: "score" });
@@ -505,7 +548,8 @@ export function showResult(
       el(
         "div",
         { style: "margin:10px 0 4px;font-weight:700", class: team === 0 ? "team-blue" : "team-red" },
-        `${TEAM_NAMES[team]} Takim`,
+        `${TEAM_NAMES[team]} Takim — ` +
+          `${world.champions.filter((x) => x.team === team).reduce((n, x) => n + x.cs, 0)} minyon`,
       ),
     );
     const table = el("table", { class: "score" });

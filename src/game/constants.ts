@@ -332,6 +332,8 @@ export const CONFIG = {
   minionGoldCannon: 48,
   minionGoldSuper: 60,
   minionXp: 32,
+  /** Minyonu kesen sampiyonun aldigi ek tecrube (temel degerin kati). */
+  lastHitXpBonus: 0.75,
   cannonXp: 62,
   /** Kule menzili ve hasari. */
   towerRange: 112,

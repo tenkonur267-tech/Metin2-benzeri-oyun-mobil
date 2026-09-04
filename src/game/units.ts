@@ -80,6 +80,12 @@ export abstract class Unit {
   comboStep = 0;
   /** Komboyu ayakta tutan sure. */
   comboRest = 0;
+  /**
+   * Bu birime en son vuran sampiyonun kimligi ve uzerinden gecen sure.
+   * Son vurusu bir minyon yapsa bile odul buradaki sampiyona gider.
+   */
+  lastChampionHit = -1;
+  lastChampionHitAgo = Infinity;
 
   /** Hareket. */
   moveTarget: Vec2 | null = null;
@@ -131,6 +137,7 @@ export abstract class Unit {
     this.swing = Math.max(0, this.swing - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.comboRest = Math.max(0, this.comboRest - dt);
+    this.lastChampionHitAgo += dt;
     if (this.comboRest <= 0) this.comboStep = 0;
     this.deathTimer = this.alive ? 0 : this.deathTimer + dt;
   }
@@ -284,6 +291,10 @@ export abstract class Unit {
       (this as unknown as { lastDamageTime: number }).lastDamageTime = world.time;
     }
     if (info.sourceId >= 0) this.recentDamage.set(info.sourceId, world.time);
+    if (source?.kind === "champion") {
+      this.lastChampionHit = source.id;
+      this.lastChampionHitAgo = 0;
+    }
 
     if (!silentNumbers && applied > 0.5) {
       world.fx.damageNumber(this.pos, applied, info.type, this.kind === "champion");

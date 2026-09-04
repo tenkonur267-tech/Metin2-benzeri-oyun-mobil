@@ -374,6 +374,27 @@ html, body {
   .lobby-help { display: none; }
 }
 
+/* ---------- Magaza: canli ozellik paneli ---------- */
+.stat-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 10px;
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+.stat-cell {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.stat-cell b { color: var(--text); font-variant-numeric: tabular-nums; }
+
 /* ---------- Ayarlar ---------- */
 .screen.settings { max-width: 640px; margin: 0 auto; }
 .set-row {
