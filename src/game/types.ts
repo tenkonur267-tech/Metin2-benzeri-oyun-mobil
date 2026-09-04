@@ -160,6 +160,8 @@ export interface DamageInfo {
   label?: string;
   /** Vampirlik uygulanmasin. */
   noLifesteal?: boolean;
+  /** Kritik vurus mu? (ses ve efekt icin) */
+  crit?: boolean;
 }
 
 export interface FloatingText {

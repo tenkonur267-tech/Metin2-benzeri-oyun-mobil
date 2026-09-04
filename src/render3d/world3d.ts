@@ -211,6 +211,9 @@ export class World3D {
     }
     this.minions.update(world.minions, team, dt);
     if (this.terrain) this.terrain.water.uniforms.uTime.value = this.time;
+    // Vurus sarsintisini oyun katmanindan al
+    this.stage.shake = world.fx.shake;
+    this.stage.tickShake(dt);
     this.fx.update(world, this.time);
 
     if (++this.visionFrame % 2 === 0) this.updateVision(world);

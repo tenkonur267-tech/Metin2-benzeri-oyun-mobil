@@ -107,6 +107,15 @@ export class Stage {
   }
 
   /** Kamerayi hedefe yumusak sekilde tasir. */
+  /** Vurus aninda kameraya verilen kisa sarsinti (0..1). */
+  shake = 0;
+  private shakePhase = 0;
+
+  /** Sarsintinin salinim fazini ilerletir. */
+  tickShake(dt: number): void {
+    this.shakePhase += dt;
+  }
+
   follow(p: Vec2, lerpAmount: number): void {
     const t = this.rig.target;
     t.x += (p.x - t.x) * lerpAmount;
@@ -125,8 +134,20 @@ export class Stage {
     const { target, pitch, distance } = this.rig;
     const y = Math.sin(pitch) * distance;
     const z = Math.cos(pitch) * distance;
-    this.camera.position.set(target.x, target.y + y, target.z + z);
-    this.camera.lookAt(target);
+
+    // Vurus sarsintisi: kisa, yuksek frekansli ve hizla sonumlenen bir kayma
+    let sx = 0;
+    let sz = 0;
+    if (this.shake > 0.001) {
+      // Genlik dogrusal: 0.22 -> ~2 birim (ekranda ~4 piksel),
+      // kritikte 0.55 -> ~5 birim. Karesi alinirsa gorunmez kaliyor.
+      const a = this.shake * 9;
+      sx = Math.sin(this.shakePhase * 41.3) * a;
+      sz = Math.cos(this.shakePhase * 37.1) * a;
+    }
+
+    this.camera.position.set(target.x + sx, target.y + y, target.z + z + sz);
+    this.camera.lookAt(target.x + sx * 0.4, target.y, target.z + sz * 0.4);
 
     // Golge kamerasi oyuncuyu takip etsin
     this.sun.position.set(target.x - 160, 260, target.z + 120);

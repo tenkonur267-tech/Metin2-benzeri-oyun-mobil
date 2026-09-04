@@ -5,6 +5,7 @@ import {
   norm,
   type Vec2,
 } from "../core/math";
+import { sfx } from "../core/audio";
 import { CONFIG, MAP_SIZE, RADIUS } from "./constants";
 import { isBlockedCircle } from "./grid";
 import type {
@@ -258,7 +259,17 @@ export abstract class Unit {
 
     const applied = remaining;
     this.hp -= applied;
-    if (applied > 0) this.hitFlash = 0.12;
+    if (applied > 0) this.hitFlash = 0.16;
+
+    // Vurus sesi: oyuncunun vurdugu ya da oyuncuya inen darbeler duyulur
+    if (applied > 0 && info.isAuto) {
+      const bySelf = source?.kind === "champion" && (source as { isPlayer?: boolean }).isPlayer;
+      const onSelf = this.kind === "champion" && (this as unknown as { isPlayer?: boolean }).isPlayer;
+      if (bySelf || onSelf) {
+        sfx.play(info.crit ? "crit" : "hit");
+        world.fx.addShake(info.crit ? 0.55 : bySelf ? 0.22 : 0.3);
+      }
+    }
     if (applied > 0 && this.kind === "champion") {
       (this as unknown as { lastDamageTime: number }).lastDamageTime = world.time;
     }
@@ -405,6 +416,10 @@ export abstract class Unit {
     this.attackCd = this.attackInterval;
     this.windup = Math.min(0.28, this.attackInterval * 0.32);
     this.windupTarget = t;
+    // Animasyon burada baslar; hasar `windup` kadar sonra, yani salinimin
+    // ortasinda iner. Onceden animasyon hasarla ayni anda tetikleniyordu,
+    // bu yuzden karakter once vuruyor sonra sallaniyor gibi gorunuyordu.
+    this.swing = this.windup + 0.16;
     this.onAttackStart(world, t);
   }
 
@@ -414,16 +429,16 @@ export abstract class Unit {
   protected landAutoAttack(world: World, target: Unit): void {
     const crit = Math.random() < this.stats.crit;
     const dmg = this.stats.ad * (crit ? 1.75 : 1);
-    this.swing = 0.24;
     if (this.isRanged) {
       world.spawnAutoProjectile(this, target, dmg, crit);
     } else {
-      world.fx.slash(this.pos, target.pos, this.team);
+      world.fx.meleeImpact(this.pos, target.pos, this.team, crit);
       target.takeDamage(world, {
         amount: dmg,
         type: "physical",
         sourceId: this.id,
         isAuto: true,
+        crit,
         label: "saldiri",
       });
       if (crit) world.fx.critMark(target.pos);

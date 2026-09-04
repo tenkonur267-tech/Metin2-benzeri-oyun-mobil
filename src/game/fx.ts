@@ -25,7 +25,19 @@ export class Fx {
     width: number;
   }[] = [];
 
+  /**
+   * Kamera sarsintisi. Oyuncunun vurdugu ve yedigi darbelerde artar,
+   * her karede sonumlenir; 3B katman bu degeri okuyup kamerayi oynatir.
+   */
+  shake = 0;
+
+  /** Sarsintiyi tetikler (mevcut sarsintiyla en buyugu alinir). */
+  addShake(amount: number): void {
+    this.shake = Math.min(1, Math.max(this.shake, amount));
+  }
+
   clear(): void {
+    this.shake = 0;
     this.texts.length = 0;
     this.particles.length = 0;
     this.rings.length = 0;
@@ -33,6 +45,7 @@ export class Fx {
   }
 
   update(dt: number): void {
+    this.shake = Math.max(0, this.shake - dt * 2.2);
     for (let i = this.texts.length - 1; i >= 0; i--) {
       const t = this.texts[i];
       t.life -= dt;
@@ -181,6 +194,45 @@ export class Fx {
       2.5,
     );
     this.burst(to, TEAM_COLORS[team], 4, 60);
+  }
+
+  /**
+   * Yakin dovus darbesi: kilicin izi, carpma noktasinda kivilcim ve
+   * genisleyen bir halka. Vurusun hissedilmesi icin efekt hedefin
+   * uzerinde, saldiran yonunden gelecek sekilde konumlanir.
+   */
+  meleeImpact(from: Vec2, to: Vec2, team: Team, crit: boolean): void {
+    const d = dirTo(from, to);
+    // Carpma noktasi: hedefin saldirgana bakan yuzu
+    const hit = { x: to.x - d.x * 8, y: to.y - d.y * 8 };
+    const color = TEAM_COLORS[team];
+
+    // Salinim izi
+    this.beam(
+      { x: from.x + d.x * 14, y: from.y + d.y * 14 },
+      { x: to.x + d.x * 4, y: to.y + d.y * 4 },
+      "#ffffff",
+      0.09,
+      crit ? 6 : 4,
+    );
+    this.beam(
+      { x: from.x + d.x * 12, y: from.y + d.y * 12 },
+      { x: to.x + d.x * 2, y: to.y + d.y * 2 },
+      color,
+      0.16,
+      crit ? 9 : 6,
+    );
+
+    // Carpma kivilcimlari ve halkasi
+    this.burst(hit, "#fff3d0", crit ? 12 : 7, crit ? 190 : 130);
+    this.ring(hit, crit ? 26 : 16, "#ffffff", crit ? 0.26 : 0.18, crit ? 3 : 2);
+  }
+
+  /** Menzilli merminin hedefe carpmasi. */
+  rangedImpact(pos: Vec2, color: string, crit: boolean): void {
+    this.burst(pos, "#fff3d0", crit ? 10 : 6, crit ? 170 : 110);
+    this.burst(pos, color, crit ? 8 : 5, crit ? 130 : 85);
+    this.ring(pos, crit ? 22 : 14, color, 0.2, 2);
   }
 
   levelUp(pos: Vec2, team: Team): void {

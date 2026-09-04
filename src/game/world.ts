@@ -356,7 +356,7 @@ export class World {
       crit,
       homing: target,
       range: 700,
-      radius: 7,
+      radius: 9,
       color: attacker.kind === "champion" ? (attacker as Champion).def.color : "#d6e6ff",
       label: "saldiri",
       shape: "arrow",
@@ -844,10 +844,12 @@ export class World {
       type: p.damageType,
       sourceId: p.sourceId,
       isAuto: p.isAuto,
+      crit: p.crit,
       label: p.label,
     });
     if (p.crit) this.fx.critMark(target.pos);
-    this.fx.burst(target.pos, p.color, p.isAuto ? 4 : 9, p.isAuto ? 55 : 110);
+    if (p.isAuto) this.fx.rangedImpact(target.pos, p.color, p.crit);
+    else this.fx.burst(target.pos, p.color, 9, 110);
     if (p.slow) {
       target.addEffect({
         id: `slow_${p.sourceId}`,

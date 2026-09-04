@@ -295,8 +295,10 @@ export class ChampionActor {
         this.swingCooldown = Math.min(this.trigger(state), 0.45);
       } else if (c.swing > 0.1 && this.swingCooldown <= 0) {
         // Saldiri animasyonu saldiri hizina uydurulur
+        // Hasar `windup` kadar sonra iniyor; klip temas anini oraya
+        // denk getirsin diye sure kisa tutulur.
         const period = c.stats.attackSpeed > 0 ? 1 / c.stats.attackSpeed : 0.6;
-        this.swingCooldown = Math.min(this.trigger("Attack", Math.min(period * 0.8, 1.1)), 0.5);
+        this.swingCooldown = Math.min(this.trigger("Attack", Math.min(period * 0.7, 0.75)), 0.5);
       } else if (
         tookDamage &&
         this.hitCooldown <= 0 &&
