@@ -66,7 +66,7 @@ async function main(): Promise<void> {
     const model = await loadModel(`${lo.model}.glb`);
     const obj = instantiate(model);
     const target = lo.scale ?? 1;
-    obj.scale.setScalar(target / 1.75);
+    obj.scale.setScalar(target / (lo.modelHeight ?? 1.75));
 
     const show = new Set(lo.show);
     for (const g of GEAR_NODES[lo.model] ?? []) {
@@ -74,17 +74,24 @@ async function main(): Promise<void> {
       if (node) node.visible = show.has(g);
     }
     const handHeight = target * (lo.handScale ?? 0.5);
-    if (lo.mainHand && lib.has(lo.mainHand)) hand(obj, "handslot.r", lib.clone(lo.mainHand, handHeight));
-    if (lo.offHand && lib.has(lo.offHand)) hand(obj, "handslot.l", lib.clone(lo.offHand, handHeight * 0.34));
-    if (lo.tint !== undefined) {
-      const tint = new THREE.Color(lo.tint);
+    if (lo.mainHand && lib.has(lo.mainHand)) {
+      hand(obj, lo.handBone ?? "handslot.r", lib.clone(lo.mainHand, handHeight));
+    }
+    if (lo.offHand && lib.has(lo.offHand)) {
+      hand(obj, lo.offHandBone ?? "handslot.l", lib.clone(lo.offHand, handHeight * 0.34));
+    }
+    const tintHex = lo.teamTint ? 0x4aa8ff : lo.tint;
+    if (tintHex !== undefined) {
+      const tint = new THREE.Color(tintHex);
+      const amount = lo.teamTint ? 0.55 : 0.28;
       obj.traverse((o) => {
         const m = o as THREE.Mesh;
-        if (!m.isMesh || !/Cape|Cloak|Body/i.test(m.name)) return;
+        const skinned = (m as THREE.SkinnedMesh).isSkinnedMesh;
+        if (!m.isMesh || !(skinned || /Cape|Cloak|Body/i.test(m.name))) return;
         const list = Array.isArray(m.material) ? m.material : [m.material];
         for (const mm of list) {
           const std = mm as THREE.MeshStandardMaterial;
-          if (std.color) std.color.lerp(tint, 0.28);
+          if (std.color) std.color.lerp(tint, amount);
         }
       });
     }

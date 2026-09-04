@@ -51,7 +51,7 @@ export function buildPortraits(models: Map<string, LoadedModel>): void {
 
     const holder = new THREE.Group();
     const body = instantiate(model);
-    body.scale.setScalar(1 / 1.75);
+    body.scale.setScalar(1 / (lo.modelHeight ?? 1.75));
 
     // Sadece bu sampiyonun ekipmani gorunur
     const show = new Set(lo.show);
@@ -59,11 +59,15 @@ export function buildPortraits(models: Map<string, LoadedModel>): void {
       const node = findNode(body, name);
       if (node) node.visible = show.has(name);
     }
-    if (lo.tint !== undefined) {
-      const tint = new THREE.Color(lo.tint);
+    // Portrede takim rengi yerine sampiyon rengi kullanilir (lobide
+    // takim yok); `teamTint` acikken mavi taraf rengi temsil eder.
+    const tintHex = lo.teamTint ? 0x4aa8ff : lo.tint;
+    if (tintHex !== undefined) {
+      const tint = new THREE.Color(tintHex);
       body.traverse((o) => {
         const m = o as THREE.Mesh;
-        if (!m.isMesh || !/Cape|Cloak|Body|Hat|Helmet|Hood/i.test(m.name)) return;
+        const skinned = (m as THREE.SkinnedMesh).isSkinnedMesh;
+        if (!m.isMesh || !(skinned || /Cape|Cloak|Body|Hat|Helmet|Hood/i.test(m.name))) return;
         const list = Array.isArray(m.material) ? m.material : [m.material];
         for (const mm of list) {
           const std = mm as THREE.MeshStandardMaterial;

@@ -119,7 +119,7 @@ export class ChampionActor {
     this.bodyHeight = target;
 
     this.body = instantiate(model);
-    this.body.scale.setScalar(target / KAYKIT_HEIGHT);
+    this.body.scale.setScalar(target / (loadout.modelHeight ?? KAYKIT_HEIGHT));
     this.root.add(this.body);
 
     // --- Hazir ekipman parcalarindan sadece bu sampiyonunkiler acilir ---
@@ -134,25 +134,34 @@ export class ChampionActor {
     // Modelde hazir silahi olmayan sampiyonlara disaridan silah takilir
     const handHeight = target * (loadout.handScale ?? 0.5);
     if (loadout.mainHand && props.has(loadout.mainHand)) {
-      attachToHand(this.body, "handslot.r", props.clone(loadout.mainHand, handHeight));
+      attachToHand(this.body, loadout.handBone ?? "handslot.r", props.clone(loadout.mainHand, handHeight));
     }
     if (loadout.offHand && props.has(loadout.offHand)) {
-      attachToHand(this.body, "handslot.l", props.clone(loadout.offHand, handHeight * 0.34));
+      attachToHand(
+        this.body,
+        loadout.offHandBone ?? "handslot.l",
+        props.clone(loadout.offHand, handHeight * 0.34),
+      );
     }
 
     // Govde parcalari tek mesh'te birlestirilir (10 cizim cagrisi -> 1)
     mergeSkinned(this.body);
 
-    // --- Sampiyon rengi: govdeye ve pelerine hafif tint ---
-    if (loadout.tint !== undefined) {
-      const tint = new THREE.Color(loadout.tint);
+    // --- Govde rengi ---
+    // `teamTint` acikken takim rengi kullanilir: iki takim da ayni
+    // sampiyonu oynarken kimin kim oldugu anlasilsin diye.
+    const tintHex = loadout.teamTint ? colorOf(TEAM_COLORS[champ.team]) : loadout.tint;
+    if (tintHex !== undefined) {
+      const tint = new THREE.Color(tintHex);
+      const amount = loadout.teamTint ? 0.55 : 0.28;
       this.body.traverse((o) => {
         const m = o as THREE.Mesh;
-        if (!m.isMesh || !/merged|Cape|Cloak/i.test(m.name)) return;
+        const skinned = (m as THREE.SkinnedMesh).isSkinnedMesh;
+        if (!m.isMesh || !(skinned || /Cape|Cloak/i.test(m.name))) return;
         const list = Array.isArray(m.material) ? m.material : [m.material];
         for (const mm of list) {
           const std = mm as THREE.MeshStandardMaterial;
-          if (std.color) std.color.lerp(tint, 0.28);
+          if (std.color) std.color.lerp(tint, amount);
         }
       });
     }
@@ -215,6 +224,7 @@ export class ChampionActor {
     // --- Animasyonlar ---
     const clips: Partial<Record<AnimName, Clip>> = {
       ...BASE_CLIPS,
+      ...(loadout.base ?? {}),
       Attack: loadout.attack,
       Cast: loadout.cast,
       ...(loadout.abilities ?? {}),

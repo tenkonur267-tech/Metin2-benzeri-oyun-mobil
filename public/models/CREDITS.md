@@ -59,3 +59,18 @@ sikistirma). Ham 40 MB -> yaklasik 4.5 MB.
 Arazi yukseklik alani (koridorlar, nehir yatagi, orman duvarlarinin
 kayalik yukseltileri), nehir yuzeyi golgelendiricisi, savas sisi,
 efektler, sesler ve arayuz bu depoda kodla uretilir.
+
+## Quaternius — Universal Animation Library (CC0 1.0)
+
+`champ-mannequin.glb` — Quaternius'un Universal Animation Library'sinin
+ucretsiz surumu: tek bir Rigify iskeleti (53 kemik) uzerinde manken govde
+ve animasyon klipleri. Gercek karakter modeli gelene kadar sampiyon
+govdesi olarak kullanilir.
+
+- Kaynak: https://quaternius.com/packs/universalanimationlibrary.html
+- Kullanilan glTF surumu: https://github.com/J-Ponzo/gltf-universal-animation-library
+- Lisans: CC0 1.0 (atif zorunlu degil)
+
+Bu iskelet Quaternius'un Universal Base Characters ve Ultimate Modular
+Characters paketleriyle ayni; o paketlerden bir model eklendiginde
+animasyon kurulumu degismeden calisir.

@@ -25,6 +25,16 @@ const ADV = `${RAW}/KayKit-Character-Pack-Adventures-1.0/main/addons/kaykit_char
 const SKE = `${RAW}/KayKit-Character-Pack-Skeletons-1.0/main/addons/kaykit_character_pack_skeletons`;
 const HEX = `${RAW}/KayKit-Medieval-Hexagon-Pack-1.0/main/addons/kaykit_medieval_hexagon_pack/Assets/gltf`;
 
+/**
+ * Quaternius Universal Animation Library (CC0) — tek bir Rigify iskeleti
+ * uzerinde 46 klip ve bir manken govde. Gercek karakter modeli gelene
+ * kadar sampiyon govdesi olarak kullanilir; iskelet Quaternius'un
+ * Universal / Modular karakterleriyle ayni oldugu icin model
+ * degistirildiginde animasyon kurulumu oldugu gibi kalir.
+ */
+const ANIMLIB =
+  "https://raw.githubusercontent.com/J-Ponzo/gltf-universal-animation-library/main/glTF";
+
 /** Kenney Nature Kit 2.1 (CC0) — yaprakli agaclar, calilar ve kayalik. */
 const NAT = "https://raw.githubusercontent.com/ETdoFresh/kenney.nl/master/kenney_natureKit_2.1/Models/GLTF%20format";
 
@@ -40,7 +50,21 @@ const TMP = ".asset-cache";
  */
 const BASE_ANIMS = ["Idle", "Walking_A", "Running_A", "Hit_A", "Death_A", "Cheer"];
 
+/**
+ * Manken govdenin klipleri (Quaternius Universal Animation Library).
+ * KayKit'ten farkli adlandirma kullanir; eslesme `loadout.ts` icinde.
+ */
+const MANNEQUIN_ANIMS = [
+  "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop",
+  "Sword_Idle", "Sword_Attack", "Punch_Jab", "Punch_Cross",
+  "Spell_Simple_Enter", "Spell_Simple_Shoot", "Spell_Simple_Idle_Loop",
+  "Hit_Chest", "Hit_Head", "Death01",
+  "Roll", "Jump_Start", "Jump_Loop", "Jump_Land",
+  "Dance_Loop", "Interact", "Idle_Talking_Loop",
+];
+
 const KEEP_ANIMS = {
+  "champ-mannequin": MANNEQUIN_ANIMS,
   "champ-knight": [
     ...BASE_ANIMS,
     "1H_Melee_Attack_Chop", "1H_Melee_Attack_Slice_Horizontal", "1H_Melee_Attack_Stab",
@@ -91,6 +115,15 @@ const MANIFEST = [
   ].map(([src, name]) => ({
     kind: "glb", url: `${ADV}/Characters/gltf/${src}.glb`, name, character: true,
   })),
+
+  // --- Manken sampiyon govdesi + animasyon kutuphanesi ---
+  {
+    kind: "gltf",
+    dir: ANIMLIB,
+    src: "AnimationLibrary_Godot_Standard",
+    name: "champ-mannequin",
+    character: true,
+  },
 
   // --- Minyonlar ve orman canavarlari (iskeletli) ---
   ...[

@@ -38,10 +38,35 @@ export type Clip =
   | "Dodge_Backward"
   | "Spellcast_Shoot"
   | "Spellcast_Raise"
-  | "Spellcast_Long";
+  | "Spellcast_Long"
+  // --- Quaternius Universal Animation Library (manken govde) ---
+  | "Idle_Loop"
+  | "Idle_Talking_Loop"
+  | "Walk_Loop"
+  | "Jog_Fwd_Loop"
+  | "Sprint_Loop"
+  | "Sword_Idle"
+  | "Sword_Attack"
+  | "Punch_Jab"
+  | "Punch_Cross"
+  | "Spell_Simple_Enter"
+  | "Spell_Simple_Shoot"
+  | "Spell_Simple_Idle_Loop"
+  | "Hit_Chest"
+  | "Hit_Head"
+  | "Death01"
+  | "Roll"
+  | "Jump_Start"
+  | "Jump_Loop"
+  | "Jump_Land"
+  | "Dance_Loop"
+  | "Interact";
 
 /** Yetenek tuslari. */
 export type AbilityKey = "Q" | "W" | "E" | "R";
+
+/** Modele gore degisebilen temel durumlar. */
+export type BaseState = "Idle" | "Walk" | "Run" | "Death" | "Hit" | "Recall";
 
 export interface Loadout {
   /** public/models altindaki dosya adi (uzantisiz). */
@@ -54,6 +79,11 @@ export interface Loadout {
   cast: Clip;
   /** Her yetenek tusu icin ayri animasyon. */
   abilities?: Partial<Record<AbilityKey, Clip>>;
+  /**
+   * Temel durum klipleri. KayKit disi bir model kullanildiginda
+   * (farkli klip adlandirmasi) buradan ezilir.
+   */
+  base?: Partial<Record<BaseState, Clip>>;
   /** Pelerin/kumas parcalarina uygulanan sampiyon rengi. */
   tint?: number;
   /** Govde boyu carpani (silueti farklilastirmak icin). */
@@ -63,6 +93,19 @@ export interface Loadout {
   offHand?: string;
   /** Takilan silahin oyun birimi cinsinden boyu (govde boyuna orani). */
   handScale?: number;
+  /** Silahin takilacagi kemikler (varsayilan KayKit isimleri). */
+  handBone?: string;
+  offHandBone?: string;
+  /**
+   * Modelin kendi birimindeki referans boyu; olcekleme buna bolunur.
+   * Verilmezse KayKit referansi kullanilir.
+   */
+  modelHeight?: number;
+  /**
+   * Govdeyi sampiyon rengi yerine takim rengiyle boyar.
+   * Iki takim da ayni sampiyonu kullanirken ayirt etmeyi saglar.
+   */
+  teamTint?: boolean;
 }
 
 const KNIGHT_GEAR = [
@@ -89,21 +132,43 @@ export const GEAR_NODES: Record<string, string[]> = {
 };
 
 export const LOADOUTS: Record<string, Loadout> = {
-  // Tank — miğferli sovalye, iki elli kilic
+  /**
+   * Tank.
+   *
+   * Gecici govde: Quaternius Universal Animation Library'nin manken
+   * modeli (CC0). Gercek karakter modeli geldiginde yalnizca `model`
+   * degisir; iskelet ve klip adlari ayni oldugu icin asagidaki
+   * eslesme oldugu gibi kalir.
+   */
   kaya: {
-    model: "champ-knight",
-    show: ["2H_Sword", "Knight_Helmet", "Knight_Cape"],
-    attack: "2H_Melee_Attack_Chop",
-    cast: "Spellcast_Shoot",
+    model: "champ-mannequin",
+    show: [],
+    base: {
+      Idle: "Sword_Idle",
+      Walk: "Walk_Loop",
+      Run: "Jog_Fwd_Loop",
+      Death: "Death01",
+      Hit: "Hit_Chest",
+      Recall: "Dance_Loop",
+    },
+    attack: "Sword_Attack",
+    cast: "Spell_Simple_Shoot",
     // Q kavrayici darbe, W tas kalkan, E ileri savurma, R cevresel sarsinti
     abilities: {
-      Q: "2H_Melee_Attack_Slice",
-      W: "Block",
-      E: "2H_Melee_Attack_Stab",
-      R: "2H_Melee_Attack_Spin",
+      Q: "Punch_Cross",
+      W: "Spell_Simple_Enter",
+      E: "Roll",
+      R: "Spell_Simple_Shoot",
     },
-    tint: 0x4f7fd0,
-    scale: 1.08,
+    mainHand: "sword-2handed",
+    handScale: 0.66,
+    handBone: "DEF-hand.R",
+    offHandBone: "DEF-hand.L",
+    modelHeight: 2.21,
+    teamTint: true,
+    // Manken KayKit karakterlerinden daha ince; ayni boyda kaldiginda
+    // ekranda kucuk duruyor, bu yuzden biraz buyutuldu.
+    scale: 1.34,
   },
   // Buyucu — sivri sapkali, uzun asa
   selin: {
