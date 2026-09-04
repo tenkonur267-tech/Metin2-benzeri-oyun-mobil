@@ -637,7 +637,16 @@ export function applyVisionToProps(root: THREE.Object3D, vision: THREE.Texture):
           .replace("#include <common>", "#include <common>\nvarying vec3 vWorldPosFow;")
           .replace(
             "#include <project_vertex>",
-            "vWorldPosFow = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <project_vertex>",
+            // Dekor nesneleri InstancedMesh; `instanceMatrix` uygulanmazsa
+            // her kopya sisi model yerelinde, yani haritanin kosesinde
+            // ornekliyordu. Bu yuzden agaclarin ve kayalarin uzerindeki
+            // sis karakter yaklassa da kalkmiyordu.
+            `vec4 fowPos = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+  fowPos = instanceMatrix * fowPos;
+#endif
+vWorldPosFow = (modelMatrix * fowPos).xyz;
+#include <project_vertex>`,
           );
         shader.fragmentShader = shader.fragmentShader
           .replace(
