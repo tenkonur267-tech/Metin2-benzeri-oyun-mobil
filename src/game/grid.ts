@@ -7,8 +7,30 @@ export const GRID_N = MAP_SIZE / CELL; // 50x50
 /** Duvar hucrelerini isaretleyen izgara (1 = gecilmez). */
 export const blocked: Uint8Array = new Uint8Array(GRID_N * GRID_N);
 
+/**
+ * Harita cevresindeki gecilmez kayalik bandin kalinligi.
+ *
+ * Arazi kenari yukselen bir kaya sirtiyla kapaniyor; oyuncu bu sirtin
+ * icinden gecmesin diye bant yol bulma izgarasinda da kapatilir.
+ * Deger, kayalarin ic yuzuyle ayni hizada tutulur (bkz. terrain.ts).
+ */
+export const BORDER = 70;
+
 function rasterize(): void {
   for (const w of WALLS) markRect(w);
+  markBorder();
+}
+
+/** Harita kenarindaki bandi kapatir. */
+function markBorder(): void {
+  for (let y = 0; y < GRID_N; y++) {
+    for (let x = 0; x < GRID_N; x++) {
+      const cx = x * CELL + CELL / 2;
+      const cy = y * CELL + CELL / 2;
+      const d = Math.min(cx, cy, MAP_SIZE - cx, MAP_SIZE - cy);
+      if (d < BORDER) blocked[y * GRID_N + x] = 1;
+    }
+  }
 }
 
 function markRect(w: WallRect): void {

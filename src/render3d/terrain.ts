@@ -4,6 +4,7 @@
  * cit, ev, fener...). Modeller `public/models/` altindadir, bkz. CREDITS.md.
  */
 import * as THREE from "three";
+import { BORDER } from "../game/grid";
 import { closestPointOnSegment, clamp, type Vec2 } from "../core/math";
 import { Rng } from "../core/rng";
 import {
@@ -614,7 +615,6 @@ const CLIFF_BLOCKS = [
   "rock-single-a", "rock-single-c", "rock-single-e",
 ];
 const WATERPLANTS = ["waterplant-a", "waterplant-b"];
-const FOREST_FLOOR = ["nat-stump", "nat-log"];
 
 /** Modeli istenen yukseklige olceklendirip yerlesim kaydi olusturur. */
 function place(
@@ -649,7 +649,7 @@ function buildJungleWalls(props: PropLibrary, rng: Rng): THREE.Group {
 
   for (const w of WALLS) {
     // --- Kenar yuzu: dikdortgenin cevresini blok blok dolas ---
-    const inset = 5;
+    const inset = 12;
     const x0 = w.x + inset;
     const y0 = w.y + inset;
     const x1 = w.x + w.w - inset;
@@ -722,21 +722,22 @@ function buildBorderWall(props: PropLibrary, rng: Rng): THREE.Group {
     return out;
   };
 
-  // Ic etek: oyun alanina bakan kesintisiz kaya sirti
-  for (const p of ring(EDGE_BAND * 0.92, 20, 4)) {
-    list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(24, 34), rng.range(0, Math.PI * 2)));
+  // Ic etek: oyun alanina bakan kesintisiz kaya sirti.
+  // Kayalarin ic yuzu, yurumenin durdugu `BORDER` cizgisiyle ayni hizada.
+  for (const p of ring(BORDER + 14, 20, 3)) {
+    list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(26, 36), rng.range(0, Math.PI * 2)));
   }
   // Sirtin uzerinde ve arkasinda koyu ignelik orman
-  for (const p of ring(EDGE_BAND * 0.62, 26, 8)) {
+  for (const p of ring(BORDER * 0.62, 26, 8)) {
     list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(52, 72), rng.range(0, Math.PI * 2)));
   }
-  for (const p of ring(EDGE_BAND * 0.3, 30, 10)) {
+  for (const p of ring(BORDER * 0.3, 30, 10)) {
     if (rng.chance(0.75)) {
       list.push(place(props, rng.pick(CONIFER_CLUMPS), p.x, p.y, rng.range(46, 66), rng.range(0, Math.PI * 2)));
     }
   }
   // En distaki kayalar siluetı kapatir
-  for (const p of ring(EDGE_BAND * 0.1, 28, 8)) {
+  for (const p of ring(BORDER * 0.08, 28, 8)) {
     list.push(place(props, rng.pick(CLIFF_BLOCKS), p.x, p.y, rng.range(28, 44), rng.range(0, Math.PI * 2)));
   }
   return instancePlacements(props, list);
@@ -800,12 +801,12 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
   };
 
   // --- Obek merkezleri ---
-  const groveCount = Math.round(52 * K * K);
+  const groveCount = Math.round(30 * K * K);
   const groves: Vec2[] = [];
   for (let a = 0; a < groveCount * 140 && groves.length < groveCount; a++) {
     const x = rng.range(0, MAP_SIZE);
     const y = rng.range(0, MAP_SIZE);
-    if (!free(x, y, 96)) continue;
+    if (!free(x, y, 132)) continue;
     taken.push({ x, y });
     groves.push({ x, y });
   }
@@ -816,7 +817,7 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
     const family = roll < 0.46 ? BROADLEAF : roll < 0.72 ? CONIFER_CLUMPS : TALL_TREES;
     const tall = family === TALL_TREES;
     const radius = rng.range(46, 82);
-    const want = Math.round(rng.range(5, 11));
+    const want = Math.round(rng.range(4, 8));
 
     for (let i = 0, tries = 0; i < want && tries < want * 30; tries++) {
       const a = rng.range(0, Math.PI * 2);
@@ -831,30 +832,27 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
       list.push(place(props, rng.pick(family), x, y, h, rng.range(0, Math.PI * 2)));
     }
 
-    // Obek eteginde alt bitki ortusu
-    const under = Math.round(rng.range(4, 9));
+    // Obek eteginde alcak bitki ortusu.
+    // Yurunen zeminde kaya/kutuk yok: icinden gecilen kati nesne izlenimi
+    // vermesinler diye sadece ot ve alcak cali kullanilir.
+    const under = Math.round(rng.range(2, 5));
     for (let i = 0; i < under; i++) {
       const a = rng.range(0, Math.PI * 2);
-      const d = radius * rng.range(0.35, 1.15);
+      const d = radius * rng.range(0.5, 1.1);
       const x = g.x + Math.cos(a) * d;
       const y = g.y + Math.sin(a) * d;
-      if (!free(x, y, 14)) continue;
+      if (!free(x, y, 22)) continue;
       taken.push({ x, y });
-      const r = rng.next();
-      if (r < 0.45) {
-        list.push(place(props, rng.pick(GRASS_MODELS), x, y, rng.range(7, 12), rng.range(0, Math.PI * 2)));
-      } else if (r < 0.72) {
-        list.push(place(props, rng.pick(BUSHES_MODELS), x, y, rng.range(10, 15), rng.range(0, Math.PI * 2)));
-      } else if (r < 0.9) {
-        list.push(place(props, rng.pick(FOREST_FLOOR), x, y, rng.range(8, 13), rng.range(0, Math.PI * 2)));
-      } else {
-        list.push(place(props, rng.pick(ROCKS), x, y, rng.range(9, 14), rng.range(0, Math.PI * 2)));
-      }
+      list.push(place(
+        props,
+        rng.chance(0.6) ? rng.pick(GRASS_MODELS) : rng.pick(BUSHES_MODELS),
+        x, y, rng.range(7, 13), rng.range(0, Math.PI * 2),
+      ));
     }
   }
 
   // --- Obekler arasinda tek tuk agac (bosluklari doldurur) ---
-  const loose = Math.round(58 * K * K);
+  const loose = Math.round(20 * K * K);
   for (let a = 0; a < loose * 60 && a < 40000; a++) {
     const x = rng.range(0, MAP_SIZE);
     const y = rng.range(0, MAP_SIZE);
@@ -864,7 +862,7 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
   }
 
   // --- Nehir kiyisina su bitkileri ---
-  for (let i = 0; i < Math.round(30 * K); i++) {
+  for (let i = 0; i < Math.round(16 * K); i++) {
     const t = rng.range(120 * K, MAP_SIZE - 120 * K);
     const side = rng.chance(0.5) ? 1 : -1;
     const off = side * rng.range(26, 42);
@@ -884,14 +882,17 @@ function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
 
   for (const camp of CAMPS) {
     const r = (camp.epic ? 46 : camp.buff === "scuttle" ? 26 : camp.buff ? 38 : 30) * K;
-    const count = camp.epic ? 8 : camp.buff === "scuttle" ? 0 : camp.buff ? 7 : 5;
+    // Yurunen zeminde kaya birakilmaz (icinden geciliyor gibi duruyordu);
+    // kampi zemindeki halka isaretler. Sadece ejderha/baron cukurunun
+    // kenarinda, zaten gecilmez duvarin ustunde kaya vardir.
+    const count = camp.epic ? 5 : 0;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2;
       list.push(place(
         props, ROCKS[i % ROCKS.length],
         camp.pos.x + Math.cos(a) * r,
         camp.pos.y + Math.sin(a) * r,
-        camp.epic ? 22 : camp.buff ? 17 : 13,
+        camp.epic ? 16 : camp.buff ? 12 : 10,
         rng.range(0, Math.PI * 2),
       ));
     }
@@ -949,14 +950,16 @@ function buildBases(props: PropLibrary, rng: Rng): THREE.Group {
       list.push(place(props, model, x, y, model.startsWith("well") ? 22 : 40, a + Math.PI));
     }
 
-    // Cikis yolunun iki yaninda kayalik
+    // Cikis yolunun iki yaninda alcak calilik.
+    // Once kaya diziliyordu; yurunen zemindeydi ve icinden geciliyor gibi
+    // duruyordu.
     for (let i = 0; i < 6; i++) {
       const d = (78 + i * 30) * K;
       for (const side of [-1, 1]) {
-        const a = face + side * 0.55;
+        const a = face + side * 0.62;
         const x = clamp(n.x + Math.cos(a) * d, 48, MAP_SIZE - 48);
         const y = clamp(n.y + Math.sin(a) * d, 48, MAP_SIZE - 48);
-        list.push(place(props, rng.pick(ROCKS), x, y, 14, rng.range(0, Math.PI * 2)));
+        list.push(place(props, rng.pick(BUSHES_MODELS), x, y, rng.range(10, 14), rng.range(0, Math.PI * 2)));
       }
     }
   }

@@ -12,62 +12,133 @@ export interface MenuResult {
   difficulty: number;
 }
 
-/** Ana menu + sampiyon secimi. */
+/** Rol suzgeci sekmelerinde kullanilan sira. */
+const ROLE_ORDER = ["Savasci", "Tank", "Suikastci", "Nisanci", "Buyucu", "Destek"];
+
+/** Rolun kisa simgesi. */
+const ROLE_ICON: Record<string, string> = {
+  Savasci: "⚔️",
+  Tank: "🛡️",
+  Suikastci: "🗡️",
+  Nisanci: "🏹",
+  Buyucu: "🔮",
+  Destek: "✨",
+};
+
+/**
+ * Lobi ekrani.
+ *
+ * Mobile Legends'daki duzen: ustte oyuncu seridi, solda secili
+ * kahramanin buyuk gorunumu ve yetenekleri, sagda rol sekmeleriyle
+ * suzulen kahraman listesi ve savasa girme dugmesi.
+ */
 export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void): void {
   clear(root);
   let selected = CHAMPIONS[0].id;
   let difficulty = 1;
+  let roleFilter = "";
+  let abilityKey = "Q";
 
-  const screen = el("div", { class: "screen" });
-  screen.append(
-    el("h1", {}, "Rift Mobil"),
-    el("div", { class: "sub" }, "5v5 MOBA — sampiyonunu sec, dusman ana binasini yik"),
+  const screen = el("div", { class: "screen lobby" });
+
+  // ---------------------------------------------------------------- ust serit
+  const roles = ROLE_ORDER.filter((r) => CHAMPIONS.some((c) => c.role === r));
+  const bar = el("div", { class: "lobby-bar" });
+  const me = el("div", { class: "lobby-me" });
+  me.append(
+    el("div", { class: "lobby-avatar" }, "🎮"),
+    el(
+      "div",
+      {},
+      el("div", { class: "lobby-name" }, "Komutan"),
+      el("div", { class: "lobby-rank" }, "Egitim Maci • Tek oyunculu"),
+    ),
   );
+  const chips = el("div", { class: "lobby-chips" });
+  chips.append(
+    el("div", { class: "chip" }, "🏆 " + String(CHAMPIONS.length) + " kahraman"),
+    el("div", { class: "chip" }, "🗺️ Rift"),
+  );
+  bar.append(me, el("div", { class: "grow" }), chips);
 
-  const scroll = el("div", { class: "scroll" });
-  const grid = el("div", { class: "champ-grid" });
-  const detail = el("div", { class: "detail" });
+  // ------------------------------------------------------------- sol: kahraman
+  const stage = el("div", { class: "lobby-stage" });
+  const hero = el("div", { class: "hero-shot" });
+  const heroName = el("div", { class: "hero-name" });
+  const heroTitle = el("div", { class: "hero-title" });
+  const heroTags = el("div", { class: "hero-tags" });
+  const heroLore = el("div", { class: "hero-lore" });
+  const skillRow = el("div", { class: "skill-row" });
+  const skillText = el("div", { class: "skill-text" });
 
-  const renderDetail = (): void => {
+  const heroInfo = el("div", { class: "hero-info" });
+  heroInfo.append(heroName, heroTitle, heroTags, heroLore, skillRow, skillText);
+  stage.append(hero, heroInfo);
+
+  const renderHero = (): void => {
     const c = CHAMPIONS.find((x) => x.id === selected)!;
-    clear(detail);
-    const head = el("div", { class: "detail-head" });
-    const headshot = championPortrait(c.id).cloneNode(false) as HTMLCanvasElement;
-    headshot.getContext("2d")!.drawImage(championPortrait(c.id), 0, 0);
-    headshot.style.width = "56px";
-    headshot.style.height = "56px";
-    head.append(headshot);
-    head.append(
-      el(
-        "div",
-        {},
-        el("div", { class: "title" }, `${c.name} — ${c.title}`),
-        el(
-          "div",
-          { class: "lore" },
-          `${c.role} • ${c.ranged ? "Menzilli" : "Yakin dovus"} — ${c.lore}`,
-        ),
-      ),
+    clear(hero);
+    const shot = el("canvas", { class: "hero-canvas" }) as HTMLCanvasElement;
+    const src = championPortrait(c.id);
+    shot.width = src.width;
+    shot.height = src.height;
+    shot.getContext("2d")!.drawImage(src, 0, 0);
+    hero.append(shot);
+    hero.style.setProperty("--hero-color", c.color);
+
+    heroName.textContent = c.name;
+    heroTitle.textContent = c.title;
+    clear(heroTags);
+    heroTags.append(
+      el("span", { class: "tag" }, `${ROLE_ICON[c.role] ?? "•"} ${c.role}`),
+      el("span", { class: "tag" }, c.ranged ? "Menzilli" : "Yakin dovus"),
     );
-    detail.append(head);
+    heroLore.textContent = c.lore;
+
+    if (!c.abilities.some((a) => a.key === abilityKey)) abilityKey = c.abilities[0].key;
+    clear(skillRow);
     for (const a of c.abilities) {
-      detail.append(
-        el(
-          "div",
-          { class: "ability-line" },
-          el("div", { class: "ability-key" }, ABILITY_ICON[`${c.id}:${a.key}`] ?? a.key),
-          el(
-            "div",
-            { class: "ability-body", html: `<b>${a.key} — ${a.name}</b><br>${a.desc}` },
-          ),
-        ),
+      const b = el(
+        "div",
+        { class: `skill${a.key === abilityKey ? " sel" : ""}${a.ultimate ? " ult" : ""}` },
+        ABILITY_ICON[`${c.id}:${a.key}`] ?? a.key,
       );
+      b.append(el("span", { class: "skill-key" }, a.key));
+      onTap(b, () => {
+        abilityKey = a.key;
+        renderHero();
+      });
+      skillRow.append(b);
     }
+    const a = c.abilities.find((x) => x.key === abilityKey)!;
+    skillText.innerHTML = `<b>${a.name}</b><br>${a.desc}`;
+  };
+
+  // ------------------------------------------------------------ sag: liste
+  const side = el("div", { class: "lobby-side" });
+  const tabs = el("div", { class: "role-tabs" });
+  const grid = el("div", { class: "champ-grid" });
+  const list = el("div", { class: "scroll" }, grid);
+
+  const renderTabs = (): void => {
+    clear(tabs);
+    const add = (label: string, value: string): void => {
+      const t = el("div", { class: `role-tab${roleFilter === value ? " sel" : ""}` }, label);
+      onTap(t, () => {
+        roleFilter = value;
+        renderTabs();
+        renderGrid();
+      });
+      tabs.append(t);
+    };
+    add("Tumu", "");
+    for (const r of roles) add(`${ROLE_ICON[r] ?? ""} ${r}`, r);
   };
 
   const renderGrid = (): void => {
     clear(grid);
     for (const c of CHAMPIONS) {
+      if (roleFilter && c.role !== roleFilter) continue;
       const card = el("div", { class: `champ-card${c.id === selected ? " sel" : ""}` });
       const portrait = el("div", { class: "portrait" });
       portrait.append(championPortrait(c.id));
@@ -75,42 +146,46 @@ export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void
       onTap(card, () => {
         selected = c.id;
         renderGrid();
-        renderDetail();
+        renderHero();
       });
       grid.append(card);
     }
   };
 
-  renderGrid();
-  renderDetail();
-  scroll.append(grid, detail);
-
-  const diffRow = el("div", { class: "row wrap", style: "margin:10px 0 8px" });
+  // -------------------------------------------------------------- alt: baslat
+  const foot = el("div", { class: "lobby-foot" });
+  const diffRow = el("div", { class: "diff-row" });
   const diffLabels = ["Kolay", "Normal", "Zor"];
-  const diffBtns: HTMLButtonElement[] = [];
+  const diffBtns: HTMLElement[] = [];
   diffLabels.forEach((label, i) => {
-    const b = el("button", { class: `btn small${i === difficulty ? " primary" : " ghost"}` }, label);
+    const b = el("div", { class: `diff${i === difficulty ? " sel" : ""}` }, label);
     onTap(b, () => {
       difficulty = i;
-      diffBtns.forEach((x, j) => (x.className = `btn small${j === difficulty ? " primary" : " ghost"}`));
+      diffBtns.forEach((x, j) => (x.className = `diff${j === difficulty ? " sel" : ""}`));
     });
     diffBtns.push(b);
     diffRow.append(b);
   });
-  diffRow.prepend(el("span", { class: "hint", style: "margin-right:6px" }, "Bot zorlugu:"));
+  diffRow.prepend(el("span", { class: "diff-label" }, "Bot zorlugu"));
 
-  const play = el("button", { class: "btn primary", style: "width:100%;padding:16px" }, "SAVASA GIR");
+  const play = el("button", { class: "btn primary play-btn" }, "SAVASA GIR");
   onTap(play, () => onStart({ championId: selected, difficulty }));
+  foot.append(diffRow, play);
 
   const help = el("div", {
-    class: "hint",
-    style: "margin-top:8px;text-align:center",
+    class: "hint lobby-help",
     html:
       "Sol taraf: hareket cubugu • Sag alt: <span class='kbd'>⚔️</span> saldiri, <span class='kbd'>Q W E R</span> yetenekler<br>" +
-      "Yetenek dugmesini basili tutup surukleyerek nisan al, birakinca kullan.",
+      "Saldiri ve yetenek dugmelerini basili tutup surukleyerek hedef sec, birakinca kullan.",
   });
 
-  screen.append(scroll, diffRow, play, help);
+  side.append(tabs, list, foot, help);
+
+  renderTabs();
+  renderGrid();
+  renderHero();
+
+  screen.append(bar, el("div", { class: "lobby-body" }, stage, side));
   root.append(screen);
 }
 
