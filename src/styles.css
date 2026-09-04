@@ -374,6 +374,93 @@ html, body {
   .lobby-help { display: none; }
 }
 
+/* ---------- Ayarlar ---------- */
+.screen.settings { max-width: 640px; margin: 0 auto; }
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.set-name { font-size: 14px; font-weight: 600; }
+.set-hint { font-size: 11px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+.set-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gold);
+  min-width: 44px;
+  text-align: right;
+}
+.set-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 26px;
+  margin: 2px 0 4px;
+  background: transparent;
+}
+.set-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #46b4ff, #f0c26a);
+}
+.set-range::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #46b4ff, #f0c26a);
+}
+.set-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #f4e2bb;
+  border: 2px solid #8d6316;
+}
+.set-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f4e2bb;
+  border: 2px solid #8d6316;
+}
+.set-toggle {
+  flex: 0 0 auto;
+  min-width: 76px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.set-toggle.on {
+  color: #14251a;
+  border-color: #a8e08a;
+  background: linear-gradient(180deg, #b6ec96, #79b45e);
+}
+.set-sep {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.btn.danger {
+  background: linear-gradient(180deg, #a8382e, #6d2018);
+  border-color: #ff9b8f;
+  color: #ffe9e5;
+}
+
 /* ---------- Sampiyon secimi ---------- */
 .champ-grid {
   display: grid;

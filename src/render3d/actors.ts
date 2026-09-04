@@ -340,7 +340,9 @@ export class ChampionActor {
         let state = COMBO[step];
         if (!this.actions.has(state)) state = "Attack";
         const span = Math.min(period * (step === 2 ? 0.95 : 0.7), step === 2 ? 0.95 : 0.75);
-        this.swingCooldown = Math.min(this.trigger(state, span), 0.6);
+        // Bekleme her zaman saldiri periyodundan kisa kalir; yoksa hizli
+        // saldiran sampiyonlarda araya giren vuruslar animasyonsuz gecerdi.
+        this.swingCooldown = Math.min(this.trigger(state, span), period * 0.8);
       } else if (
         tookDamage &&
         this.hitCooldown <= 0 &&

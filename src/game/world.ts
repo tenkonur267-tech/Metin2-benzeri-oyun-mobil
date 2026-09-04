@@ -773,6 +773,14 @@ export class World {
     }
   }
 
+  /** Oyuncunun takimi teslim olur; mac rakibin galibiyetiyle biter. */
+  surrender(): void {
+    if (this.winner !== null) return;
+    this.winner = this.player.team === 0 ? 1 : 0;
+    this.log("Takiminiz teslim oldu.", "#ff9b8f");
+    sfx.play("lose");
+  }
+
   private updateStructureProtection(s: Structure): void {
     const ext = s as Structure & { guardInhibs?: Structure[]; guardTowers?: Structure[] };
     if (ext.guardInhibs) {

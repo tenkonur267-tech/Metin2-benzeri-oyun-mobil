@@ -3,6 +3,7 @@ import { ITEMS } from "../game/items";
 import type { Champion } from "../game/champion";
 import type { World } from "../game/world";
 import { TEAM_NAMES } from "../game/constants";
+import { sfx } from "../core/audio";
 import { clear, el, onTap } from "./dom";
 import { ABILITY_ICON } from "../render/hud";
 import { championPortrait } from "../render3d/portrait3d";
@@ -189,6 +190,130 @@ export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void
   renderHero();
 
   screen.append(bar, el("div", { class: "lobby-body" }, stage, side));
+  root.append(screen);
+}
+
+/** Ayarlar ekraninin oyuna baglandigi noktalar. */
+export interface SettingsHooks {
+  zoom: number;
+  zoomMin: number;
+  zoomMax: number;
+  autoTarget: boolean;
+  onZoom: (v: number) => void;
+  onAutoTarget: (v: boolean) => void;
+  onSound: (v: boolean) => void;
+  onResetCamera: () => void;
+  onSurrender: () => void;
+  onQuit: () => void;
+  onClose: () => void;
+}
+
+/**
+ * Ayarlar.
+ *
+ * Kamera uzakligi, otomatik hedef ve ses buradan yonetilir; maci
+ * birakma ve teslim olma da burada.
+ */
+export function showSettings(root: HTMLElement, h: SettingsHooks): void {
+  clear(root);
+  const screen = el("div", { class: "screen transparent settings" });
+
+  const close = el("button", { class: "btn small" }, "Kapat ✕");
+  onTap(close, h.onClose);
+  screen.append(
+    el("div", { class: "shop-head" }, el("strong", { class: "grow" }, "⚙️ Ayarlar"), close),
+  );
+
+  const scroll = el("div", { class: "scroll" });
+
+  // --- Kamera uzakligi ---
+  const zoomVal = el("span", { class: "set-val" }, `${Math.round(h.zoom)}`);
+  const zoom = el("input", {
+    type: "range",
+    class: "set-range",
+    min: String(h.zoomMin),
+    max: String(h.zoomMax),
+    step: "5",
+    value: String(Math.round(h.zoom)),
+  }) as HTMLInputElement;
+  zoom.addEventListener("input", () => {
+    const v = Number(zoom.value);
+    zoomVal.textContent = `${v}`;
+    h.onZoom(v);
+  });
+  scroll.append(
+    el(
+      "div",
+      { class: "set-row" },
+      el(
+        "div",
+        { class: "grow" },
+        el("div", { class: "set-name" }, "Kamera uzakligi"),
+        el("div", { class: "set-hint" }, "Kucuk deger = yakin plan. Oyunda iki parmakla da ayarlanir."),
+      ),
+      zoomVal,
+    ),
+    zoom,
+  );
+
+  // --- Anahtarlar ---
+  const toggle = (
+    name: string,
+    hint: string,
+    value: boolean,
+    onChange: (v: boolean) => void,
+  ): HTMLElement => {
+    let on = value;
+    const btn = el("button", { class: `set-toggle${on ? " on" : ""}` }, on ? "ACIK" : "KAPALI");
+    onTap(btn, () => {
+      on = !on;
+      btn.className = `set-toggle${on ? " on" : ""}`;
+      btn.textContent = on ? "ACIK" : "KAPALI";
+      onChange(on);
+    });
+    return el(
+      "div",
+      { class: "set-row" },
+      el("div", { class: "grow" }, el("div", { class: "set-name" }, name), el("div", { class: "set-hint" }, hint)),
+      btn,
+    );
+  };
+
+  scroll.append(
+    toggle(
+      "Otomatik hedef",
+      "Saldiri tusuna basinca en uygun dusmani kendiliginden secer. Kapaliyken hedefi surukleyerek sen secersin.",
+      h.autoTarget,
+      h.onAutoTarget,
+    ),
+    toggle("Ses", "Vurus, yetenek ve uyari sesleri.", sfx.enabled, h.onSound),
+  );
+
+  const resetCam = el("button", { class: "btn small ghost", style: "width:100%;margin-top:6px" }, "Kamera acisini sifirla");
+  onTap(resetCam, h.onResetCamera);
+  scroll.append(resetCam);
+
+  // --- Mac islemleri ---
+  scroll.append(el("div", { class: "set-sep" }, "Mac"));
+  const surrender = el("button", { class: "btn small danger", style: "width:100%" }, "🏳️ Teslim ol");
+  onTap(surrender, () => {
+    if (surrender.dataset.armed) h.onSurrender();
+    else {
+      surrender.dataset.armed = "1";
+      surrender.textContent = "Emin misin? Tekrar dokun";
+    }
+  });
+  const quit = el("button", { class: "btn small ghost", style: "width:100%;margin-top:6px" }, "🚪 Maçtan cik");
+  onTap(quit, () => {
+    if (quit.dataset.armed) h.onQuit();
+    else {
+      quit.dataset.armed = "1";
+      quit.textContent = "Emin misin? Tekrar dokun";
+    }
+  });
+  scroll.append(surrender, quit);
+
+  screen.append(scroll);
   root.append(screen);
 }
 

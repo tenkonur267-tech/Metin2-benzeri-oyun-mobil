@@ -689,24 +689,7 @@ function drawButtons(
     1,
   );
   circleButton(g, L.scoreboard, "#141f2e", "#c8dcf0", "📊", L.scoreboard.r, 1);
-  circleButton(
-    g,
-    L.autoToggle,
-    ui.autoAttack ? "#22331c" : "#2a1a1a",
-    ui.autoAttack ? "#a8e08a" : "#ff9b8f",
-    "🤖",
-    L.autoToggle.r,
-    1,
-  );
-  circleButton(
-    g,
-    L.soundToggle,
-    sfx.enabled ? "#141f2e" : "#2a1a1a",
-    sfx.enabled ? "#a8e6ff" : "#ff9b8f",
-    sfx.enabled ? "🔊" : "🔇",
-    L.soundToggle.r,
-    1,
-  );
+  circleButton(g, L.settings, "#141f2e", "#c8dcf0", "⚙️", L.settings.r, 1);
 }
 
 function circleButton(

@@ -24,8 +24,7 @@ export interface HudLayout {
   shop: Circle;
   recall: Circle;
   scoreboard: Circle;
-  autoToggle: Circle;
-  soundToggle: Circle;
+  settings: Circle;
   /** Hareket cubugunun etkin oldugu bolge. */
   joystickZone: Rect;
   joystickHome: Circle;
@@ -82,12 +81,9 @@ export function computeLayout(w: number, h: number): HudLayout {
     scoreboard: narrow
       ? { x: w - 28 * s, y: mmSize + 34, r: 19 * s }
       : { x: w - mmSize - 34, y: 8 + 22, r: 19 * s },
-    autoToggle: narrow
+    settings: narrow
       ? { x: w - 28 * s, y: mmSize + 34 + 46 * s, r: 19 * s }
       : { x: w - mmSize - 34, y: 8 + 22 + 46 * s, r: 19 * s },
-    soundToggle: narrow
-      ? { x: w - 28 * s, y: mmSize + 34 + 92 * s, r: 19 * s }
-      : { x: w - mmSize - 34, y: 8 + 22 + 92 * s, r: 19 * s },
     joystickZone: { x: 0, y: h * 0.28, w: w * 0.46, h: h * 0.72 },
     joystickHome: { x: 96 * s, y: h - 118 * s, r: 52 * s },
     statusBar: { x: 8, y: 8, w: panelW, h: 56 },

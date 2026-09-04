@@ -15,9 +15,27 @@ import {
 import type { AimShape } from "./render3d/fx3d";
 import { CAM_MAX_DIST, CAM_MIN_DIST } from "./render3d/scene";
 import { World3D } from "./render3d/world3d";
-import { showMainMenu, showResult, showScoreboard, showShop } from "./ui/screens";
+import { showMainMenu, showResult, showScoreboard, showSettings, showShop } from "./ui/screens";
 
-type Phase = "loading" | "menu" | "playing" | "shop" | "score" | "result";
+type Phase = "loading" | "menu" | "playing" | "shop" | "score" | "settings" | "result";
+
+/** Ayar degerini kalici olarak saklar (depolama kapali olabilir). */
+function store(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* gizli sekme veya depolama kapali */
+  }
+}
+
+/** Saklanmis ayar degeri. */
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
 
 export class App {
   private glCanvas: HTMLCanvasElement;
@@ -69,11 +87,7 @@ export class App {
     this.view.setQuality(this.quality);
 
     this.bindEvents();
-    try {
-      sfx.setEnabled(localStorage.getItem("rift-sound") !== "0");
-    } catch {
-      /* depolama kapali olabilir */
-    }
+    sfx.setEnabled(stored("rift-sound") !== "0");
     const unlock = (): void => {
       sfx.init();
       sfx.resume();
@@ -149,6 +163,13 @@ export class App {
   private startMatch(): void {
     this.overlay.innerHTML = "";
     this.ui = newUiState();
+    // Saklanmis ayarlar
+    this.ui.autoAttack = stored("rift-autotarget") !== "0";
+    const zoom = Number(stored("rift-zoom"));
+    this.view.stage.rig.distance = Number.isFinite(zoom) && zoom > 0
+      ? clamp(zoom, CAM_MIN_DIST, CAM_MAX_DIST)
+      : 330;
+    this.view.stage.rig.yaw = 0;
     this.forcedTarget = null;
     this.attackHeld = false;
     this.world = new World({
@@ -167,6 +188,49 @@ export class App {
     showShop(this.overlay, this.world.player, () => {
       this.overlay.innerHTML = "";
       this.phase = "playing";
+    });
+  }
+
+  /** Ayarlar: kamera, otomatik hedef, ses ve mac islemleri. */
+  private openSettings(): void {
+    const world = this.world;
+    if (!world) return;
+    this.phase = "settings";
+    const rig = this.view.stage.rig;
+    const back = (): void => {
+      this.overlay.innerHTML = "";
+      this.phase = "playing";
+    };
+    showSettings(this.overlay, {
+      zoom: rig.distance,
+      zoomMin: CAM_MIN_DIST,
+      zoomMax: CAM_MAX_DIST,
+      autoTarget: this.ui.autoAttack,
+      onZoom: (v) => {
+        rig.distance = clamp(v, CAM_MIN_DIST, CAM_MAX_DIST);
+        store("rift-zoom", String(Math.round(rig.distance)));
+      },
+      onAutoTarget: (v) => {
+        this.ui.autoAttack = v;
+        store("rift-autotarget", v ? "1" : "0");
+      },
+      onSound: (v) => {
+        sfx.setEnabled(v);
+        store("rift-sound", v ? "1" : "0");
+      },
+      onResetCamera: () => {
+        rig.yaw = 0;
+        this.toast("Kamera acisi sifirlandi");
+      },
+      onSurrender: () => {
+        world.surrender();
+        back();
+      },
+      onQuit: () => {
+        this.overlay.innerHTML = "";
+        this.openMenu();
+      },
+      onClose: back,
     });
   }
 
@@ -266,19 +330,8 @@ export class App {
       this.openScore();
       return;
     }
-    if (inCircle(L.autoToggle, p.x, p.y, 8)) {
-      ui.autoAttack = !ui.autoAttack;
-      this.toast(ui.autoAttack ? "Otomatik hedef: ACIK" : "Otomatik hedef: KAPALI");
-      return;
-    }
-    if (inCircle(L.soundToggle, p.x, p.y, 8)) {
-      sfx.setEnabled(!sfx.enabled);
-      try {
-        localStorage.setItem("rift-sound", sfx.enabled ? "1" : "0");
-      } catch {
-        /* depolama kapali olabilir */
-      }
-      this.toast(sfx.enabled ? "Ses: ACIK" : "Ses: KAPALI");
+    if (inCircle(L.settings, p.x, p.y, 8)) {
+      this.openSettings();
       return;
     }
     if (inRect(L.minimap, p.x, p.y)) return;
