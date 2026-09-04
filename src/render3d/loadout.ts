@@ -162,8 +162,11 @@ export const LOADOUTS: Record<string, Loadout> = {
       Recall: "Dance_Loop",
     },
     attack: "Sword_Attack",
-    // 3'lu kombo: savurma -> ters savurma -> agir bitirici (yavas oynar)
-    combo: ["Sword_Attack_RM", "Sword_Attack"],
+    // 3'lu kombo. `Sword_Attack_RM` ile `Sword_Attack` ayni savurmanin
+    // iki kopyasi (biri kok hareketli) oldugu icin ekranda tek bir
+    // animasyon gibi duruyordu; zincir artik gercekten farkli uc
+    // hareketten olusuyor: genis savurma -> hizli sokme -> agir darbe.
+    combo: ["Punch_Jab", "Punch_Cross"],
     cast: "Spell_Simple_Shoot",
     // Q kavrayici darbe, W tas kalkan, E ileri savurma, R cevresel sarsinti
     abilities: {

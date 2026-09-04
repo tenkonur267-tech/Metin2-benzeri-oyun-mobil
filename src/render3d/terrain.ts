@@ -202,12 +202,13 @@ export const PROP_NAMES = [
   "tree-single-a", "tree-single-b",
   // Genis yaprakli agaclar ve calilar (Kenney Nature Kit)
   "nat-tree-a", "nat-tree-b", "nat-tree-c", "nat-tree-d", "nat-tree-e", "nat-tree-f",
-  "nat-bush-a", "nat-bush-b", "nat-bush-c", "nat-grass-a", "nat-grass-b",
+  "nat-bush-a", "nat-bush-b", "nat-bush-c",
+  "nat-grass-a", "nat-grass-b", "nat-grass-c",
+  "nat-lily-a", "nat-lily-b", "nat-pebble-a", "nat-pebble-b",
   "nat-rock-a", "nat-rock-b", "nat-stump", "nat-log",
   // Kayalar ve tepeler
   "rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e",
   "mountain-a", "mountain-b", "mountain-c",
-  "waterplant-a", "waterplant-b",
 ];
 
 /**
@@ -216,9 +217,11 @@ export const PROP_NAMES = [
  * yeniden boyanir.
  */
 const NATURE_PALETTE: Record<string, number> = {
-  leafsGreen: 0x2f7d3e,
+  leafsGreen: 0x39743f,
+  leafsDark: 0x25552c,
+  colorRed: 0xb8506a,
   leafsFall: 0xb8622c,
-  grass: 0x2f7d3e,
+  grass: 0x3f7a44,
   woodBark: 0x5f452e,
   wood: 0x5f452e,
   dirt: 0x8b9199,
@@ -251,6 +254,12 @@ const NATURE_MODELS = PROP_NAMES.filter((n) => n.startsWith("nat-"));
 
 /** Kaya paletiyle boyanacak modeller. */
 const NATURE_ROCKS = ["nat-rock-a", "nat-rock-b"];
+
+/**
+ * Nehir kiyisindaki cakillar: islak tas gibi koyu ve mat olmali,
+ * genel kaya grisi kullanilirsa beyaz levhalar gibi duruyorlar.
+ */
+const PEBBLE_PALETTE: Record<string, number> = { stone: 0x5f6a6b, rock: 0x5f6a6b };
 
 /** Tas paletiyle boyanacak KayKit modelleri. */
 const STONE_MODELS = [
@@ -322,6 +331,9 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   }
   for (const name of STONE_MODELS) {
     if (props.has(name)) props.recolor(name, STONE_PALETTE);
+  }
+  for (const name of PEBBLE_MODELS) {
+    if (props.has(name)) props.recolor(name, PEBBLE_PALETTE);
   }
   const mist = buildMist();
   group.add(mist.mesh);
@@ -441,9 +453,9 @@ export function makeWaterMaterial(): THREE.ShaderMaterial {
     depthWrite: false,
     uniforms: {
       uTime: { value: 0 },
-      uShallow: { value: new THREE.Color(0x7fd6e8) },
-      uDeep: { value: new THREE.Color(0x1d6f8c) },
-      uFoam: { value: new THREE.Color(0xdff6ff) },
+      uShallow: { value: new THREE.Color(0x76b6ad) },
+      uDeep: { value: new THREE.Color(0x275c66) },
+      uFoam: { value: new THREE.Color(0xcfe3e2) },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -482,17 +494,18 @@ export function makeWaterMaterial(): THREE.ShaderMaterial {
         float ripple = w1 * 0.6 + w2 * 0.4;
 
         // Derinlige gore renk
-        vec3 col = mix(uDeep, uShallow, smoothstep(0.15, 0.95, bank) * 0.75 + ripple * 0.35);
+        // Derinlik gecisi: ortada koyu, kiyiya dogru acilir
+        vec3 col = mix(uDeep, uShallow, smoothstep(0.05, 1.0, bank) * 0.85 + ripple * 0.18);
 
-        // Kenar kopugu
-        float foam = smoothstep(0.72, 1.0, bank + ripple * 0.16);
-        float foamPulse = 0.65 + 0.35 * sin(uTime * 1.6 + vUv.x * 40.0);
-        col = mix(col, uFoam, foam * foamPulse);
+        // Kiyi kopugu: yalniz en kenarda, yumusak ve sessiz
+        float foam = smoothstep(0.86, 1.0, bank + ripple * 0.1);
+        float foamPulse = 0.72 + 0.28 * sin(uTime * 1.1 + vUv.x * 26.0);
+        col = mix(col, uFoam, foam * foamPulse * 0.75);
 
-        // Parildayan yuzey cizgileri
-        col += vec3(0.10, 0.14, 0.16) * smoothstep(0.62, 0.95, ripple);
+        // Yuzeydeki isik kirilmasi: dar ve seyrek parlamalar
+        col += vec3(0.06, 0.08, 0.09) * smoothstep(0.80, 0.99, ripple);
 
-        float alpha = mix(0.82, 0.42, smoothstep(0.55, 1.0, bank));
+        float alpha = mix(0.90, 0.55, smoothstep(0.45, 1.0, bank));
         // Nehrin uclari harita kosesinde yumusakca biter
         alpha *= smoothstep(0.0, 0.035, vUv.x) * smoothstep(1.0, 0.965, vUv.x);
         gl_FragColor = vec4(col, alpha);
@@ -753,7 +766,17 @@ const TALL_TREES = ["nat-tree-e", "nat-tree-f"];
 const CONIFER_CLUMPS = ["trees-a-large", "trees-b-large", "trees-a-medium", "trees-b-medium"];
 /** Cali obekleri (gizlenme alanlari). */
 const BUSHES_MODELS = ["nat-bush-a", "nat-bush-b", "nat-bush-c"];
-const GRASS_MODELS = ["nat-grass-a", "nat-grass-b"];
+/**
+ * Zemin ortusu.
+ *
+ * Onceki modeller (Kenney `grass_leafs` / `grass_large`) yassi ve parlak
+ * yaprak levhalariydi, cimenin uzerinde oyuncak gibi duruyordu. Yerine
+ * gercek ot tutami ve alcak yaprak bitkileri kullaniliyor.
+ */
+const GRASS_MODELS = ["nat-grass-a", "nat-grass-b", "nat-grass-c"];
+/** Nehir kiyisindaki nilufer yapraklari ve cakil taslari. */
+const LILY_MODELS = ["nat-lily-a", "nat-lily-b"];
+const PEBBLE_MODELS = ["nat-pebble-a", "nat-pebble-b"];
 const ROCKS = ["rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e", "nat-rock-a", "nat-rock-b"];
 const MOUNTAINS = ["mountain-a", "mountain-b", "mountain-c"];
 /**
@@ -764,7 +787,6 @@ const MOUNTAINS = ["mountain-a", "mountain-b", "mountain-c"];
  * dev bir levha gibi yayiliyor ve gecilmez sinirin icine tasiyordu.
  */
 const CLIFF_BLOCKS = ["mountain-a", "mountain-b", "mountain-c"];
-const WATERPLANTS = ["waterplant-a", "waterplant-b"];
 
 /** Modeli istenen yukseklige olceklendirip yerlesim kaydi olusturur. */
 function place(
@@ -1026,15 +1048,23 @@ function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
     list.push(place(props, rng.pick(BROADLEAF), x, y, rng.range(46, 64), rng.range(0, Math.PI * 2)));
   }
 
-  // --- Nehir kiyisina su bitkileri ---
-  for (let i = 0; i < Math.round(16 * K); i++) {
+  // --- Nehir: suyun uzerinde nilufer, kiyisinda cakil ---
+  for (let i = 0; i < Math.round(22 * K); i++) {
     const t = rng.range(120 * K, MAP_SIZE - 120 * K);
     const side = rng.chance(0.5) ? 1 : -1;
-    const off = side * rng.range(26, 42);
+    const onWater = rng.chance(0.55);
+    // `off` dogrudan nehir merkezine olan uzakliktir (bkz. riverDist).
+    // Nilufer su icinde, cakil kiyinin disinda kalmali.
+    const off = side * (onWater ? rng.range(14, 72) : rng.range(88, 112));
     const x = t + off * Math.SQRT1_2;
     const y = t - off * Math.SQRT1_2;
     if (x < 40 || y < 40 || x > MAP_SIZE - 40 || y > MAP_SIZE - 40) continue;
-    list.push(place(props, rng.pick(WATERPLANTS), x, y, 12, rng.range(0, Math.PI * 2)));
+    if (onWater) {
+      // Nilufer yapragi su yuzeyine yatar
+      list.push(place(props, rng.pick(LILY_MODELS), x, y, rng.range(3.5, 6), rng.range(0, Math.PI * 2)));
+    } else {
+      list.push(place(props, rng.pick(PEBBLE_MODELS), x, y, rng.range(1.6, 3.2), rng.range(0, Math.PI * 2)));
+    }
   }
 
   return instancePlacements(props, list);

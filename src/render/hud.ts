@@ -55,6 +55,40 @@ export const ABILITY_ICON: Record<string, string> = {
 
 const FONT = "sans-serif";
 
+/**
+ * Kombo sayaci.
+ *
+ * Ardisik vuruslar zinciri ilerletir; oyuncunun zincirin nerede
+ * oldugunu gorebilmesi icin basinin ustunde sayilir.
+ */
+function drawCombo(g: CanvasRenderingContext2D, world: World, view: View): void {
+  const p = world.player;
+  if (!p.alive || p.comboRest <= 0 || p.comboStep < 1) return;
+  const h = view.groundHeight(p.pos.x, p.pos.y) + 46;
+  if (view.isBehind(p.pos.x, p.pos.y, h)) return;
+  const s = view.toScreen(p.pos.x, p.pos.y, h);
+
+  const n = p.comboStep + 1;
+  // Zincir sonuna dogru buyur ve renk isinir
+  const fade = clamp(p.comboRest / 0.6, 0, 1);
+  const size = 20 + Math.min(n, 6) * 1.6;
+  g.save();
+  g.globalAlpha = fade;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.font = `800 ${size}px system-ui, sans-serif`;
+  g.lineWidth = 4;
+  g.strokeStyle = "rgba(0,0,0,0.65)";
+  g.strokeText(`x${n}`, s.x, s.y);
+  g.fillStyle = n >= 3 ? "#ffd24a" : "#ffffff";
+  g.fillText(`x${n}`, s.x, s.y);
+  g.font = "700 10px system-ui, sans-serif";
+  g.strokeText("KOMBO", s.x, s.y + size * 0.72);
+  g.fillStyle = "#ffe8a8";
+  g.fillText("KOMBO", s.x, s.y + size * 0.72);
+  g.restore();
+}
+
 export function drawHud(
   g: CanvasRenderingContext2D,
   world: World,
@@ -65,6 +99,7 @@ export function drawHud(
   const p = world.player;
 
   drawUnitOverlays(g, world, view);
+  drawCombo(g, world, view);
   drawFloatingText(g, world, view);
   drawTopBar(g, world, L);
   drawPlayerPanel(g, world, L, p);

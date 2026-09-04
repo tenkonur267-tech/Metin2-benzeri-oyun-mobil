@@ -339,7 +339,9 @@ export class ChampionActor {
         const step = c.comboStep % COMBO.length;
         let state = COMBO[step];
         if (!this.actions.has(state)) state = "Attack";
-        const span = Math.min(period * (step === 2 ? 0.95 : 0.7), step === 2 ? 0.95 : 0.75);
+        // Ortadaki vurus hizli, ucuncusu agir olsun diye sure degisir
+        const shape = step === 1 ? 0.55 : step === 2 ? 0.95 : 0.7;
+        const span = Math.min(period * shape, step === 2 ? 0.95 : 0.75);
         // Bekleme her zaman saldiri periyodundan kisa kalir; yoksa hizli
         // saldiran sampiyonlarda araya giren vuruslar animasyonsuz gecerdi.
         this.swingCooldown = Math.min(this.trigger(state, span), period * 0.8);
