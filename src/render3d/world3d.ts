@@ -9,7 +9,7 @@ import type { World } from "../game/world";
 import { BASE_PROPS, ChampionActor, MinionField, MonsterActor, STRUCTURE_PROPS, StructureActor } from "./actors";
 import { AimIndicator, Fx3D } from "./fx3d";
 import { loadModel, type LoadedModel } from "./assets";
-import { Stage } from "./scene";
+import { Stage, type Quality } from "./scene";
 import { buildPortraits } from "./portrait3d";
 import {
   PROP_NAMES,
@@ -74,6 +74,7 @@ export class World3D {
     });
     onProgress?.("Arazi olusturuluyor...");
     this.terrain = buildTerrain(this.props);
+    this.terrain.mistMesh.visible = this.stage.quality !== "low";
     applyVisionToProps(this.terrain.decor, this.terrain.visionTexture);
     this.stage.scene.add(this.terrain.group);
     onProgress?.("Karakter modelleri yukleniyor...");
@@ -163,8 +164,10 @@ export class World3D {
     this.stage.resize(w, h);
   }
 
-  setQuality(q: "low" | "high"): void {
+  setQuality(q: Quality): void {
     this.stage.setQuality(q);
+    // Orman sisi genis bir saydam katman; en dusuk kademede kapatilir
+    if (this.terrain) this.terrain.mistMesh.visible = q !== "low";
   }
 
   follow(p: Vec2, lerpAmount: number): void {

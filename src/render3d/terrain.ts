@@ -183,6 +183,8 @@ export interface TerrainBuild {
   /** Nehir materyali; her karede `uTime` guncellenir. */
   water: THREE.ShaderMaterial;
   mist: THREE.ShaderMaterial;
+  /** Orman sisi katmani (dusuk kalitede gizlenir). */
+  mistMesh: THREE.Mesh;
   /** Hazir modellerden olusan dekor (savas sisi ayrica uygulanir). */
   decor: THREE.Group;
   visionTexture: THREE.DataTexture;
@@ -335,7 +337,7 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
 
   return {
     group, ground, decor,
-    water: waterMat, mist: mist.material,
+    water: waterMat, mist: mist.material, mistMesh: mist.mesh,
     visionTexture, visionData, visionSize: VISION_SIZE,
   };
 }

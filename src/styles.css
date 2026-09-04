@@ -430,6 +430,29 @@ html, body {
   background: #f4e2bb;
   border: 2px solid #8d6316;
 }
+.seg {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 9px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.seg-item.sel {
+  color: #14100a;
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #f0c26a, #c9973f);
+}
+
 .set-toggle {
   flex: 0 0 auto;
   min-width: 76px;

@@ -20,9 +20,23 @@ export interface CameraRig {
   distance: number;
 }
 
+/**
+ * Gorsel kalite kademeleri.
+ *
+ * `low`   golge yok, dusuk piksel orani, orman sisi kapali
+ * `medium` golge var (kucuk harita), orta piksel orani
+ * `high`  tam golge ve piksel orani
+ */
+export type Quality = "low" | "medium" | "high";
+
 /** Kameranin yaklasip uzaklasabilecegi araligi. */
 export const CAM_MIN_DIST = 190;
 export const CAM_MAX_DIST = 520;
+
+/** Kademeye gore en yuksek piksel orani. */
+function pixelRatioFor(q: Quality): number {
+  return q === "high" ? 2 : q === "medium" ? 1.5 : 1.25;
+}
 
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
@@ -39,7 +53,7 @@ export class Stage {
   vw = 1;
   vh = 1;
   /** Golge kalitesi / efekt yogunlugu (dusuk guclu cihazlarda kisilir). */
-  quality: "low" | "high" = "high";
+  quality: Quality = "high";
 
   private projV = new THREE.Vector3();
   private raycaster = new THREE.Raycaster();
@@ -89,22 +103,25 @@ export class Stage {
     this.scene.add(fill);
   }
 
-  setQuality(q: "low" | "high"): void {
+  setQuality(q: Quality): void {
     this.quality = q;
-    this.renderer.shadowMap.enabled = q === "high";
-    this.sun.castShadow = q === "high";
-    this.sun.shadow.mapSize.set(q === "high" ? 2048 : 1024, q === "high" ? 2048 : 1024);
-    this.renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, q === "high" ? 2 : 1.25),
-    );
+    const shadows = q !== "low";
+    this.renderer.shadowMap.enabled = shadows;
+    this.sun.castShadow = shadows;
+    const map = q === "high" ? 2048 : 1024;
+    this.sun.shadow.mapSize.set(map, map);
+    if (this.sun.shadow.map) {
+      // Golge haritasi boyutu degistiyse yeniden olusturulmali
+      this.sun.shadow.map.dispose();
+      this.sun.shadow.map = null as unknown as THREE.WebGLRenderTarget;
+    }
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioFor(q)));
   }
 
   resize(w: number, h: number): void {
     this.vw = w;
     this.vh = h;
-    this.renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, this.quality === "high" ? 2 : 1.25),
-    );
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioFor(this.quality)));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     // Genis ekranlarda gorus alani sabit kalsin diye dikey FOV'u ayarla

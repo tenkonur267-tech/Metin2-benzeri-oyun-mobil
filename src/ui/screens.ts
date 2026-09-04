@@ -4,6 +4,7 @@ import type { Champion } from "../game/champion";
 import type { World } from "../game/world";
 import { TEAM_NAMES } from "../game/constants";
 import { sfx } from "../core/audio";
+import type { Quality } from "../render3d/scene";
 import { clear, el, onTap } from "./dom";
 import { ABILITY_ICON } from "../render/hud";
 import { championPortrait } from "../render3d/portrait3d";
@@ -199,8 +200,13 @@ export interface SettingsHooks {
   zoomMin: number;
   zoomMax: number;
   autoTarget: boolean;
+  quality: Quality;
+  autoQuality: boolean;
+  fps: number;
   onZoom: (v: number) => void;
   onAutoTarget: (v: boolean) => void;
+  onQuality: (v: Quality) => void;
+  onAutoQuality: (v: boolean) => void;
   onSound: (v: boolean) => void;
   onResetCamera: () => void;
   onSurrender: () => void;
@@ -279,7 +285,51 @@ export function showSettings(root: HTMLElement, h: SettingsHooks): void {
     );
   };
 
+  // --- Gorsel kalite ---
+  const QUALITIES: { id: Quality; label: string; hint: string }[] = [
+    { id: "low", label: "Dusuk", hint: "Golge ve orman sisi kapali, en akici" },
+    { id: "medium", label: "Orta", hint: "Golge acik, cozunurluk orta" },
+    { id: "high", label: "Yuksek", hint: "Tam golge ve cozunurluk" },
+  ];
+  let quality = h.quality;
+  const qHint = el("div", { class: "set-hint" });
+  const qRow = el("div", { class: "seg" });
+  const paintQuality = (): void => {
+    clear(qRow);
+    for (const q of QUALITIES) {
+      const btn = el("div", { class: `seg-item${q.id === quality ? " sel" : ""}` }, q.label);
+      onTap(btn, () => {
+        quality = q.id;
+        paintQuality();
+        h.onQuality(q.id);
+      });
+      qRow.append(btn);
+    }
+    qHint.textContent = QUALITIES.find((q) => q.id === quality)!.hint;
+  };
+  paintQuality();
   scroll.append(
+    el(
+      "div",
+      { class: "set-row" },
+      el(
+        "div",
+        { class: "grow" },
+        el("div", { class: "set-name" }, "Gorsel kalite"),
+        qHint,
+      ),
+      el("span", { class: "set-val" }, `${Math.round(h.fps)} fps`),
+    ),
+    qRow,
+  );
+
+  scroll.append(
+    toggle(
+      "Otomatik kalite",
+      "Kareler dususe gecerse kaliteyi kendiliginden bir kademe indirir.",
+      h.autoQuality,
+      h.onAutoQuality,
+    ),
     toggle(
       "Otomatik hedef",
       "Saldiri tusuna basinca en uygun dusmani kendiliginden secer. Kapaliyken hedefi surukleyerek sen secersin.",

@@ -13,7 +13,7 @@ import {
   type UiState,
 } from "./render/hud";
 import type { AimShape } from "./render3d/fx3d";
-import { CAM_MAX_DIST, CAM_MIN_DIST } from "./render3d/scene";
+import { CAM_MAX_DIST, CAM_MIN_DIST, type Quality } from "./render3d/scene";
 import { World3D } from "./render3d/world3d";
 import { showMainMenu, showResult, showScoreboard, showSettings, showShop } from "./ui/screens";
 
@@ -50,7 +50,9 @@ export class App {
   private last = 0;
   private dpr = 1;
 
-  private quality: "low" | "high" = "high";
+  private quality: Quality = "high";
+  /** FPS dususunde kaliteyi kendiliginden indir. */
+  private autoQuality = true;
   /** Kare suresi ortalamasi (uyarlanabilir kalite icin). */
   private frameAvg = 1 / 60;
   private slowTime = 0;
@@ -82,8 +84,13 @@ export class App {
     this.layout = computeLayout(window.innerWidth, window.innerHeight);
 
     // Zayif cihazlarda golgeleri kapat; ayrica kare hizina gore uyarlanir
+    // Saklanmis kalite yoksa cihazin cekirdek sayisina gore baslar
     const lowEnd = (navigator.hardwareConcurrency ?? 4) <= 4;
-    this.quality = lowEnd ? "low" : "high";
+    const savedQ = stored("rift-quality");
+    this.quality = savedQ === "low" || savedQ === "medium" || savedQ === "high"
+      ? savedQ
+      : lowEnd ? "low" : "high";
+    this.autoQuality = stored("rift-autoquality") !== "0";
     this.view.setQuality(this.quality);
 
     this.bindEvents();
@@ -206,6 +213,20 @@ export class App {
       zoomMin: CAM_MIN_DIST,
       zoomMax: CAM_MAX_DIST,
       autoTarget: this.ui.autoAttack,
+      quality: this.quality,
+      autoQuality: this.autoQuality,
+      fps: this.frameAvg > 0 ? 1 / this.frameAvg : 0,
+      onQuality: (v) => {
+        this.quality = v;
+        this.view.setQuality(v);
+        this.slowTime = 0;
+        store("rift-quality", v);
+      },
+      onAutoQuality: (v) => {
+        this.autoQuality = v;
+        this.slowTime = 0;
+        store("rift-autoquality", v ? "1" : "0");
+      },
       onZoom: (v) => {
         rig.distance = clamp(v, CAM_MIN_DIST, CAM_MAX_DIST);
         store("rift-zoom", String(Math.round(rig.distance)));
@@ -659,13 +680,21 @@ export class App {
     // Uyarlanabilir kalite: surekli dusuk FPS'te golgeler kapanir
     if (dt > 0) {
       this.frameAvg += (dt - this.frameAvg) * 0.05;
-      if (this.quality === "high" && this.phase === "playing") {
+      if (this.autoQuality && this.quality !== "low" && this.phase === "playing") {
         if (this.frameAvg > 1 / 34) {
           this.slowTime += dt;
           if (this.slowTime > 2.5) {
-            this.quality = "low";
-            this.view.setQuality("low");
-            this.toast("Performans icin gorsel kalite dusuruldu");
+            // Bir kademe indirir; hala yavassa bir sonraki esikte devam eder
+            // Yalnizca bu oturum icin dusurulur; kalici secim
+            // oyuncunun ayarlardan sectigi degerdir.
+            this.quality = this.quality === "high" ? "medium" : "low";
+            this.view.setQuality(this.quality);
+            this.slowTime = 0;
+            this.toast(
+              this.quality === "medium"
+                ? "Performans icin kalite: ORTA"
+                : "Performans icin kalite: DUSUK",
+            );
           }
         } else {
           this.slowTime = Math.max(0, this.slowTime - dt);
