@@ -35,14 +35,31 @@ export function facingToYaw(facing: number): number {
  * kullandigi tusa gore secilir (bkz. loadout.ts `abilities`).
  */
 type AnimName =
-  | "Idle" | "Walk" | "Run" | "Attack" | "Cast" | "Death" | "Hit" | "Recall"
+  | "Idle" | "Walk" | "Run" | "Attack" | "Attack2" | "Attack3"
+  | "Cast" | "Death" | "Hit" | "Recall"
   | "Q" | "W" | "E" | "R";
 
+/** Kombo zincirindeki vurus durumlari (sirayla oynatilir). */
+const COMBO: AnimName[] = ["Attack", "Attack2", "Attack3"];
+
+/**
+ * Kok hareketini (root motion) klipten ayiklar.
+ *
+ * `*_RM` klipleri karakteri kendi basina ilerletir; konumu oyun
+ * mantigi belirledigi icin bu izler atilir, geriye yalnizca
+ * govdenin savurma hareketi kalir.
+ */
+function stripRootMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
+  const keep = clip.tracks.filter((t) => !/^root\.position$/i.test(t.name));
+  if (keep.length === clip.tracks.length) return clip;
+  return new THREE.AnimationClip(clip.name, clip.duration, keep, clip.blendMode);
+}
+
 /** Bir kez oynayip son karede duran (donguye girmeyen) durumlar. */
-const ONCE = new Set<AnimName>(["Attack", "Cast", "Death", "Hit", "Q", "W", "E", "R"]);
+const ONCE = new Set<AnimName>(["Attack", "Attack2", "Attack3", "Cast", "Death", "Hit", "Q", "W", "E", "R"]);
 
 /** Yetenek animasyonu oynarken hareket/beklemeye donmeyi engelleyen durumlar. */
-const BUSY = new Set<AnimName>(["Attack", "Cast", "Q", "W", "E", "R"]);
+const BUSY = new Set<AnimName>(["Attack", "Attack2", "Attack3", "Cast", "Q", "W", "E", "R"]);
 
 /** Oyun ici durum adi -> varsayilan KayKit klip adi. */
 const BASE_CLIPS: Record<"Idle" | "Walk" | "Run" | "Death" | "Hit" | "Recall", Clip> = {
@@ -222,17 +239,21 @@ export class ChampionActor {
     }
 
     // --- Animasyonlar ---
+    const combo = loadout.combo ?? [];
     const clips: Partial<Record<AnimName, Clip>> = {
       ...BASE_CLIPS,
       ...(loadout.base ?? {}),
       Attack: loadout.attack,
+      Attack2: combo[0],
+      Attack3: combo[1],
       Cast: loadout.cast,
       ...(loadout.abilities ?? {}),
     };
     this.mixer = new THREE.AnimationMixer(this.body);
     for (const [state, clipName] of Object.entries(clips) as [AnimName, Clip][]) {
-      const clip = model.animations.find((c) => c.name === clipName);
-      if (!clip) continue;
+      const found = model.animations.find((c) => c.name === clipName);
+      if (!found) continue;
+      const clip = stripRootMotion(found);
       const action = this.mixer.clipAction(clip);
       if (ONCE.has(state)) {
         action.setLoop(THREE.LoopOnce, 1);
@@ -313,7 +334,13 @@ export class ChampionActor {
         // Hasar `windup` kadar sonra iniyor; klip temas anini oraya
         // denk getirsin diye sure kisa tutulur.
         const period = c.stats.attackSpeed > 0 ? 1 / c.stats.attackSpeed : 0.6;
-        this.swingCooldown = Math.min(this.trigger("Attack", Math.min(period * 0.7, 0.75)), 0.5);
+        // Kombo: ardisik vuruslar sirayla farkli klip oynar, ucuncusu
+        // bitirici oldugu icin daha yavas ve agir savurulur.
+        const step = c.comboStep % COMBO.length;
+        let state = COMBO[step];
+        if (!this.actions.has(state)) state = "Attack";
+        const span = Math.min(period * (step === 2 ? 0.95 : 0.7), step === 2 ? 0.95 : 0.75);
+        this.swingCooldown = Math.min(this.trigger(state, span), 0.6);
       } else if (
         tookDamage &&
         this.hitCooldown <= 0 &&

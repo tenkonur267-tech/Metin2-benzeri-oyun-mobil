@@ -13,6 +13,7 @@ import {
   type UiState,
 } from "./render/hud";
 import type { AimShape } from "./render3d/fx3d";
+import { CAM_MAX_DIST, CAM_MIN_DIST } from "./render3d/scene";
 import { World3D } from "./render3d/world3d";
 import { showMainMenu, showResult, showScoreboard, showShop } from "./ui/screens";
 
@@ -42,6 +43,16 @@ export class App {
   /** Saldiri dugmesi durumu. */
   private attackHeld = false;
   private attackPointer = -1;
+  /**
+   * Bir tusa/cubuga baglanmamis parmaklar. Tek parmak kamerayi
+   * dondurur, iki parmak yakinlastirir.
+   */
+  private freePointers = new Map<number, Vec2>();
+  private pinchStart = 0;
+  private pinchDist = 0;
+  /** Kamera acisini sifirlayan cift dokunusu yakalamak icin. */
+  private lastCamTap = 0;
+  private camDragged = 0;
   private forcedTarget: Unit | null = null;
 
   constructor(glCanvas: HTMLCanvasElement, hudCanvas: HTMLCanvasElement, overlay: HTMLElement) {
@@ -144,6 +155,7 @@ export class App {
       playerChampionId: this.championId,
       difficulty: this.difficulty,
     });
+    this.ui.screenDir = (dx, dy) => this.view.stage.screenDirToWorld(dx, dy);
     this.view.attach(this.world);
     this.phase = "playing";
     this.toast("Mac basladi — koridorlari it, ana binayi yik!");
@@ -271,8 +283,18 @@ export class App {
     }
     if (inRect(L.minimap, p.x, p.y)) return;
 
-    if (inRect(L.joystickZone, p.x, p.y) || p.x < L.w * 0.5) {
+    if (!ui.joystick.active && (inRect(L.joystickZone, p.x, p.y) || p.x < L.w * 0.5)) {
       ui.joystick = { active: true, id: e.pointerId, base: { ...p }, cur: { ...p } };
+      return;
+    }
+
+    // Kalan parmaklar kamerayi yonetir
+    this.freePointers.set(e.pointerId, { ...p });
+    this.camDragged = 0;
+    if (this.freePointers.size === 2) {
+      const [a, b] = [...this.freePointers.values()];
+      this.pinchStart = Math.hypot(a.x - b.x, a.y - b.y);
+      this.pinchDist = this.view.stage.rig.distance;
     }
   }
 
@@ -289,6 +311,29 @@ export class App {
       ui.aim.moved = Math.hypot(p.x - ui.aim.origin.x, p.y - ui.aim.origin.y);
       e.preventDefault();
     }
+    const prev = this.freePointers.get(e.pointerId);
+    if (prev) {
+      const rig = this.view.stage.rig;
+      if (this.freePointers.size >= 2) {
+        // Cift parmak: aradaki mesafe orani kadar yakinlastirir
+        this.freePointers.set(e.pointerId, { ...p });
+        const [a, b] = [...this.freePointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (this.pinchStart > 8 && d > 8) {
+          rig.distance = clamp(
+            (this.pinchDist * this.pinchStart) / d,
+            CAM_MIN_DIST,
+            CAM_MAX_DIST,
+          );
+        }
+      } else {
+        // Tek parmak: karakterin etrafinda 360 derece dondurur
+        rig.yaw += ((p.x - prev.x) / this.layout.w) * Math.PI * 2.4;
+        this.camDragged += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
+        this.freePointers.set(e.pointerId, { ...p });
+      }
+      e.preventDefault();
+    }
   }
 
   private onUp(e: PointerEvent): void {
@@ -302,6 +347,17 @@ export class App {
     if (this.attackPointer === e.pointerId) {
       this.attackHeld = false;
       this.attackPointer = -1;
+    }
+    if (this.freePointers.delete(e.pointerId) && this.camDragged < 10) {
+      // Bos alana cift dokunus kamerayi varsayilan aciya dondurur
+      const now = performance.now();
+      if (now - this.lastCamTap < 320) {
+        this.view.stage.rig.yaw = 0;
+        this.toast("Kamera acisi sifirlandi");
+        this.lastCamTap = 0;
+      } else {
+        this.lastCamTap = now;
+      }
     }
     if (ui.aim.key && ui.aim.id === e.pointerId) {
       this.releaseAim(ui.aim.key);
@@ -418,7 +474,7 @@ export class App {
       const dy = ui.joystick.cur.y - ui.joystick.base.y;
       const d = Math.hypot(dx, dy);
       if (d > 8) {
-        const dir = { x: dx / d, y: dy / d };
+        const dir = this.view.stage.screenDirToWorld(dx / d, dy / d);
         p.path = [{ x: p.pos.x + dir.x * 80, y: p.pos.y + dir.y * 80 }];
         p.moveTarget = null;
         p.facing = Math.atan2(dir.y, dir.x);

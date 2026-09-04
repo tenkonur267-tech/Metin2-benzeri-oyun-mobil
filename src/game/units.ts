@@ -72,6 +72,14 @@ export abstract class Unit {
   attackCd = 0;
   windup = 0;
   windupTarget: Unit | null = null;
+  /**
+   * Kac'inci ardisik vurus (kombo sayaci).
+   * Vuruslar arasi bosluk uzarsa sifirlanir; animasyon ve efekt
+   * bu sayaca gore degisir.
+   */
+  comboStep = 0;
+  /** Komboyu ayakta tutan sure. */
+  comboRest = 0;
 
   /** Hareket. */
   moveTarget: Vec2 | null = null;
@@ -122,6 +130,8 @@ export abstract class Unit {
     this.lastPos.y = this.pos.y;
     this.swing = Math.max(0, this.swing - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.comboRest = Math.max(0, this.comboRest - dt);
+    if (this.comboRest <= 0) this.comboStep = 0;
     this.deathTimer = this.alive ? 0 : this.deathTimer + dt;
   }
 
@@ -413,6 +423,9 @@ export abstract class Unit {
     if (this.attackCd > 0) return;
     if (!this.inAttackRange(t)) return;
     this.facing = Math.atan2(t.pos.y - this.pos.y, t.pos.x - this.pos.x);
+    // Kombo: ard arda gelen vuruslar zinciri ilerletir
+    this.comboStep = this.comboRest > 0 ? this.comboStep + 1 : 0;
+    this.comboRest = this.attackInterval + 0.9;
     this.attackCd = this.attackInterval;
     this.windup = Math.min(0.19, this.attackInterval * 0.26);
     this.windupTarget = t;
@@ -432,7 +445,7 @@ export abstract class Unit {
     if (this.isRanged) {
       world.spawnAutoProjectile(this, target, dmg, crit);
     } else {
-      world.fx.meleeImpact(this.pos, target.pos, this.team, crit);
+      world.fx.meleeImpact(this.pos, target.pos, this.team, crit, this.comboStep);
       target.takeDamage(world, {
         amount: dmg,
         type: "physical",

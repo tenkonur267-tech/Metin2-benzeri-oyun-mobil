@@ -23,6 +23,8 @@ export type AimKey = AbilityKey | "D" | "F" | "A";
 export interface UiState {
   joystick: { active: boolean; id: number; base: Vec2; cur: Vec2 };
   aim: { key: AimKey | null; id: number; origin: Vec2; cur: Vec2; moved: number };
+  /** Ekran yonunu zemin yonune cevirir (kamera acisina gore). */
+  screenDir: (dx: number, dy: number) => Vec2;
   autoAttack: boolean;
   showScore: boolean;
   toast: { text: string; life: number }[];
@@ -32,6 +34,7 @@ export function newUiState(): UiState {
   return {
     joystick: { active: false, id: -1, base: { x: 0, y: 0 }, cur: { x: 0, y: 0 } },
     aim: { key: null, id: -1, origin: { x: 0, y: 0 }, cur: { x: 0, y: 0 }, moved: 0 },
+    screenDir: (dx, dy) => ({ x: dx, y: dy }),
     autoAttack: true,
     showScore: false,
     toast: [],
@@ -766,8 +769,10 @@ export function aimTarget(
     return { point: { x: p.pos.x + f.x * range * 0.8, y: p.pos.y + f.y * range * 0.8 }, target: null };
   }
 
-  const nx = dx / drag;
-  const ny = dy / drag;
+  // Kamera dondurulebildigi icin ekran yonu dunya yonune cevrilir.
+  const w = ui.screenDir(dx / drag, dy / drag);
+  const nx = w.x;
+  const ny = w.y;
   const reach = clamp(drag / (L.abilities.Q.r * 2.6), 0, 1) * range;
   const point = { x: p.pos.x + nx * reach, y: p.pos.y + ny * reach };
   if (style === "unit") {

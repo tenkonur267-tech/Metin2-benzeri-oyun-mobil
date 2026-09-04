@@ -96,13 +96,9 @@ export const ABILITY_IMPL: Record<string, Impl> = {
   "kaya:Q": (w, c, r, aim) => {
     const dmg = val([60, 95, 130, 165, 200], r, 0.8, c.stats.ad);
     const dir = aim.dir;
-    w.fx.ring(
-      { x: c.pos.x + dir.x * 55, y: c.pos.y + dir.y * 55 },
-      70,
-      c.def.color,
-      0.35,
-      5,
-    );
+    // Onundeki koniyi tarayan kaya savurusu
+    w.fx.cone(c.pos, dir, 120, 0.55, c.def.color);
+    w.fx.addShake(0.28);
     for (const u of coneTargets(w, c, dir, 120, 55)) {
       hurt(w, c, u, dmg, "physical", "Kaya Vurusu");
       slow(u, c.id, 0.3, 1.5);
@@ -113,15 +109,21 @@ export const ABILITY_IMPL: Record<string, Impl> = {
     const amount = val([80, 130, 180, 230, 280], r, 0.12, c.stats.maxHp);
     shield(c, "kaya_w", amount, 3);
     c.addEffect({ id: "kaya_w_armor", kind: "armorBuff", time: 3, value: 25, label: "Zirh", color: "#9fb3c8" });
-    w.fx.ring(c.pos, 40, "#9fd8ff", 0.6, 4);
+    // Govdeyi saran granit kabuk
+    w.fx.buffAura(c.pos, "#9fd8ff", 42);
     return true;
   },
   "kaya:E": (w, c, r, aim) => {
     const dmg = val([70, 115, 160, 205, 250], r, 0.6, c.stats.ad);
     const hit = new Set<number>();
+    const start = { x: c.pos.x, y: c.pos.y };
     c.startDash(aim.dir, 520, 0.4, (world) => {
-      world.fx.ring(c.pos, 55, c.def.color, 0.4, 4);
+      // Atilmanin bitisinde: gecilen yol + carpma dalgasi
+      world.fx.dashTrail(start, c.pos, c.def.color);
+      world.fx.shockwave(c.pos, 58, c.def.color);
+      world.fx.addShake(0.34);
     });
+    w.fx.spark(c.pos, "#ffffff", 12, 150, 4.5);
     // Atilma sirasinda carpisma icin kisa sureli alan
     w.addZone(
       makeZone({
@@ -150,8 +152,9 @@ export const ABILITY_IMPL: Record<string, Impl> = {
   },
   "kaya:R": (w, c, r) => {
     const dmg = val([220, 340, 460], r, 0.9, c.stats.ad);
-    w.fx.ring(c.pos, 175, "#ffb347", 0.9, 7);
-    w.fx.burst(c.pos, "#ffb347", 30, 190);
+    // Yeri parcalayan sok dalgasi
+    w.fx.shockwave(c.pos, 175, "#ffb347");
+    w.fx.addShake(0.75);
     for (const u of enemiesAround(w, c, c.pos, 175)) {
       hurt(w, c, u, dmg, "physical", "Yerin Ofkesi");
       stun(u, c.id, 1.2);

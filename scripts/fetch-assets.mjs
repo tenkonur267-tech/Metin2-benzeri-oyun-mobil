@@ -56,8 +56,10 @@ const BASE_ANIMS = ["Idle", "Walking_A", "Running_A", "Hit_A", "Death_A", "Cheer
  */
 const MANNEQUIN_ANIMS = [
   "Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop",
-  "Sword_Idle", "Sword_Attack", "Punch_Jab", "Punch_Cross",
-  "Spell_Simple_Enter", "Spell_Simple_Shoot", "Spell_Simple_Idle_Loop",
+  "Sword_Idle", "Sword_Attack", "Sword_Attack_RM",
+  "Punch_Enter", "Punch_Jab", "Punch_Cross",
+  "Spell_Simple_Enter", "Spell_Simple_Shoot", "Spell_Simple_Exit",
+  "Spell_Simple_Idle_Loop", "Push_Loop",
   "Hit_Chest", "Hit_Head", "Death01",
   "Roll", "Jump_Start", "Jump_Loop", "Jump_Land",
   "Dance_Loop", "Interact", "Idle_Talking_Loop",

@@ -14,9 +14,15 @@ export interface CameraRig {
   target: THREE.Vector3;
   /** Yatayla yaptigi aci (radyan). */
   pitch: number;
+  /** Hedef etrafindaki donus acisi (radyan, 0 = varsayilan bakis). */
+  yaw: number;
   /** Hedefe uzaklik. */
   distance: number;
 }
+
+/** Kameranin yaklasip uzaklasabilecegi araligi. */
+export const CAM_MIN_DIST = 190;
+export const CAM_MAX_DIST = 520;
 
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
@@ -26,6 +32,7 @@ export class Stage {
   readonly rig: CameraRig = {
     target: new THREE.Vector3(MAP_SIZE / 2, 0, MAP_SIZE / 2),
     pitch: 0.96,
+    yaw: 0,
     distance: 330,
   };
 
@@ -131,9 +138,11 @@ export class Stage {
   }
 
   private updateCamera(): void {
-    const { target, pitch, distance } = this.rig;
+    const { target, pitch, yaw, distance } = this.rig;
     const y = Math.sin(pitch) * distance;
-    const z = Math.cos(pitch) * distance;
+    const h = Math.cos(pitch) * distance;
+    const ox = Math.sin(yaw) * h;
+    const oz = Math.cos(yaw) * h;
 
     // Vurus sarsintisi: kisa, yuksek frekansli ve hizla sonumlenen bir kayma
     let sx = 0;
@@ -146,13 +155,26 @@ export class Stage {
       sz = Math.cos(this.shakePhase * 37.1) * a;
     }
 
-    this.camera.position.set(target.x + sx, target.y + y, target.z + z + sz);
+    this.camera.position.set(target.x + ox + sx, target.y + y, target.z + oz + sz);
     this.camera.lookAt(target.x + sx * 0.4, target.y, target.z + sz * 0.4);
 
     // Golge kamerasi oyuncuyu takip etsin
     this.sun.position.set(target.x - 160, 260, target.z + 120);
     this.sun.target.position.set(target.x, 0, target.z);
     this.sun.target.updateMatrixWorld();
+  }
+
+  /**
+   * Ekran yonunu (piksel farki) zemin yonune cevirir.
+   *
+   * Kamera dondurulebildigi icin "yukari suruklemek" artik sabit bir
+   * dunya yonu degil; yon cubugu ve nisan alma bu donusumu kullanir.
+   * `dy` ekran koordinatlarindaki gibi asagi dogru pozitiftir.
+   */
+  screenDirToWorld(dx: number, dy: number): Vec2 {
+    const c = Math.cos(this.rig.yaw);
+    const s = Math.sin(this.rig.yaw);
+    return { x: dx * c + dy * s, y: -dx * s + dy * c };
   }
 
   /** Dunya noktasini ekran (CSS piksel) koordinatina cevirir. */

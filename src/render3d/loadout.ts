@@ -47,10 +47,14 @@ export type Clip =
   | "Sprint_Loop"
   | "Sword_Idle"
   | "Sword_Attack"
+  | "Sword_Attack_RM"
+  | "Punch_Enter"
   | "Punch_Jab"
   | "Punch_Cross"
+  | "Push_Loop"
   | "Spell_Simple_Enter"
   | "Spell_Simple_Shoot"
+  | "Spell_Simple_Exit"
   | "Spell_Simple_Idle_Loop"
   | "Hit_Chest"
   | "Hit_Head"
@@ -75,6 +79,12 @@ export interface Loadout {
   show: string[];
   /** Normal saldiri. */
   attack: Clip;
+  /**
+   * Komboyu tamamlayan ek vurus klipleri.
+   * Ardisik vuruslarda `attack` -> combo[0] -> combo[1] -> ... sirayla
+   * oynatilir; bosluk verilince zincir basa doner.
+   */
+  combo?: Clip[];
   /** Yetenege ozel klip bulunamazsa kullanilan yedek. */
   cast: Clip;
   /** Her yetenek tusu icin ayri animasyon. */
@@ -152,6 +162,8 @@ export const LOADOUTS: Record<string, Loadout> = {
       Recall: "Dance_Loop",
     },
     attack: "Sword_Attack",
+    // 3'lu kombo: savurma -> ters savurma -> agir bitirici (yavas oynar)
+    combo: ["Sword_Attack_RM", "Sword_Attack"],
     cast: "Spell_Simple_Shoot",
     // Q kavrayici darbe, W tas kalkan, E ileri savurma, R cevresel sarsinti
     abilities: {
