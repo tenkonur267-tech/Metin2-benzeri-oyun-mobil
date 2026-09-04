@@ -28,13 +28,47 @@ html, body {
 
 #app { position: fixed; inset: 0; }
 
-#game {
+#game,
+#hud {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
   touch-action: none;
+}
+
+#game { z-index: 1; }
+#hud { z-index: 2; background: transparent; }
+#overlay { z-index: 3; }
+
+/* ---------- Yukleme ekrani ---------- */
+.screen.loading { align-items: center; justify-content: center; }
+.loading-inner { text-align: center; max-width: 320px; margin: auto; }
+.loading-logo { font-size: 64px; margin-bottom: 6px; animation: pulse 1.6s ease-in-out infinite; }
+.loading-bar {
+  margin: 14px auto 0;
+  width: 220px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.loading-bar span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #c9973f, #ffe9b8);
+  animation: slide 1.1s ease-in-out infinite;
+}
+@keyframes slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
 }
 
 #overlay {

@@ -5,7 +5,7 @@ import type { World } from "../game/world";
 import { TEAM_NAMES } from "../game/constants";
 import { clear, el, onTap } from "./dom";
 import { ABILITY_ICON } from "../render/hud";
-import { championPortrait } from "../render/portrait";
+import { championPortrait } from "../render3d/portrait3d";
 
 export interface MenuResult {
   championId: string;
@@ -32,7 +32,11 @@ export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void
     const c = CHAMPIONS.find((x) => x.id === selected)!;
     clear(detail);
     const head = el("div", { class: "detail-head" });
-    head.append(championPortrait(c.id, 54, "#4aa8ff"));
+    const headshot = championPortrait(c.id).cloneNode(false) as HTMLCanvasElement;
+    headshot.getContext("2d")!.drawImage(championPortrait(c.id), 0, 0);
+    headshot.style.width = "56px";
+    headshot.style.height = "56px";
+    head.append(headshot);
     head.append(
       el(
         "div",
@@ -66,7 +70,7 @@ export function showMainMenu(root: HTMLElement, onStart: (r: MenuResult) => void
     for (const c of CHAMPIONS) {
       const card = el("div", { class: `champ-card${c.id === selected ? " sel" : ""}` });
       const portrait = el("div", { class: "portrait" });
-      portrait.append(championPortrait(c.id, 96, "#4aa8ff"));
+      portrait.append(championPortrait(c.id));
       card.append(portrait, el("div", { class: "name" }, c.name), el("div", { class: "role" }, c.role));
       onTap(card, () => {
         selected = c.id;

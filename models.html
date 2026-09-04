@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rift Mobil — Model Galerisi</title>
+    <style>
+      body { margin: 0; background: #0b1a26; color: #e6f1ff; font-family: system-ui, sans-serif; }
+      header { padding: 10px 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      h1 { font-size: 15px; margin: 0; letter-spacing: 2px; color: #f0c26a; }
+      #label { font-size: 12px; color: #8fa8c4; }
+      select { background: #16304f; color: #e6f1ff; border: 1px solid #33587f; border-radius: 8px; padding: 5px 8px; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>MODEL GALERISI</h1>
+      <label style="font-size:12px;color:#8fa8c4">Animasyon:
+        <select id="anim"></select>
+      </label>
+      <span id="label"></span>
+    </header>
+    <canvas id="c"></canvas>
+    <script type="module" src="/src/dev/modelGallery.ts"></script>
+  </body>
+</html>

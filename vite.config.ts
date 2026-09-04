@@ -15,7 +15,7 @@ export default defineConfig({
       // Oyun + gelistirici sprite galerisi
       input: {
         main: "index.html",
-        sprites: "sprites.html",
+        models: "models.html",
       },
     },
   },

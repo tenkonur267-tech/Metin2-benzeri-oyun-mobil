@@ -4,9 +4,18 @@ import { CONFIG, LANES, MAP_SIZE, TEAM_COLORS, lanePath } from "../game/constant
 import type { Champion } from "../game/champion";
 import type { World } from "../game/world";
 import type { HudLayout } from "./layout";
-import type { Renderer } from "./renderer";
-import { roundRect } from "./mapCanvas";
-import { championPortrait } from "./portrait";
+import { roundRect } from "./draw";
+import { championPortrait } from "../render3d/portrait3d";
+
+/** HUD'un ihtiyac duydugu kamera/goruntu arayuzu (3B sahne saglar). */
+export interface View {
+  vw: number;
+  vh: number;
+  toScreen(x: number, y: number, height?: number): Vec2;
+  toWorld(sx: number, sy: number): Vec2;
+  groundHeight(x: number, y: number): number;
+  isBehind(x: number, y: number, height?: number): boolean;
+}
 
 export type AbilityKey = "Q" | "W" | "E" | "R";
 export type AimKey = AbilityKey | "D" | "F";
@@ -46,21 +55,206 @@ const FONT = "sans-serif";
 export function drawHud(
   g: CanvasRenderingContext2D,
   world: World,
-  r: Renderer,
+  view: View,
   L: HudLayout,
   ui: UiState,
 ): void {
   const p = world.player;
 
-  drawAimIndicator(g, world, r, L, ui, p);
+  drawUnitOverlays(g, world, view);
+  drawFloatingText(g, world, view);
   drawTopBar(g, world, L);
   drawPlayerPanel(g, world, L, p);
-  drawMinimap(g, world, r, L);
+  drawMinimap(g, world, view, L);
   drawEventLog(g, world, L);
   drawJoystick(g, L, ui);
   drawButtons(g, world, L, ui, p);
   if (!p.alive) drawDeathOverlay(g, L, p);
   drawToasts(g, L, ui);
+}
+
+
+// ---------------------------------------------------------------------------
+// Birim ustu bilgiler (can cubugu, isim, seviye) - ekran uzayinda cizilir
+// ---------------------------------------------------------------------------
+
+/** Birimin basinin ustundeki yukseklik (oyun birimi). */
+function headHeight(u: import("../game/units").Unit): number {
+  switch (u.kind) {
+    case "champion":
+      return u.radius * 3.2;
+    case "minion":
+      return u.radius * 2.9;
+    case "monster":
+      return u.radius * 2.8;
+    case "tower":
+      return u.radius * 6.2;
+    case "inhibitor":
+      return u.radius * 4.0;
+    default:
+      return u.radius * 4.2;
+  }
+}
+
+function miniBar(
+  g: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  pct: number,
+  color: string,
+): void {
+  const x = cx - w / 2;
+  g.fillStyle = "rgba(0,0,0,0.62)";
+  g.fillRect(x - 1, cy - 1, w + 2, h + 2);
+  g.fillStyle = color;
+  g.fillRect(x, cy, w * clamp(pct, 0, 1), h);
+}
+
+export function drawUnitOverlays(
+  g: CanvasRenderingContext2D,
+  world: World,
+  view: View,
+): void {
+  const p = world.player;
+  g.save();
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+
+  const onScreen = (u: import("../game/units").Unit, hh: number): Vec2 | null => {
+    if (view.isBehind(u.pos.x, u.pos.y, view.groundHeight(u.pos.x, u.pos.y) + hh)) return null;
+    const s = view.toScreen(u.pos.x, u.pos.y, view.groundHeight(u.pos.x, u.pos.y) + hh);
+    if (s.x < -80 || s.y < -60 || s.x > view.vw + 80 || s.y > view.vh + 60) return null;
+    return s;
+  };
+
+  // Yapilar
+  for (const st of world.structures) {
+    if (!st.alive) continue;
+    const s = onScreen(st, headHeight(st));
+    if (!s) continue;
+    const w = st.kind === "nexus" ? 50 : st.kind === "inhibitor" ? 38 : 32;
+    miniBar(g, s.x, s.y, w, st.kind === "nexus" ? 6 : 4, st.hpPct, TEAM_COLORS[st.team]);
+  }
+
+  // Orman canavarlari
+  for (const m of world.monsters) {
+    if (!m.alive) continue;
+    const s = onScreen(m, headHeight(m));
+    if (!s) continue;
+    miniBar(g, s.x, s.y, m.spec.epic ? 48 : 32, 4, m.hpPct, "#8fd06a");
+    if (m.spec.epic) {
+      g.font = "bold 10px sans-serif";
+      g.fillStyle = "#c9a0ff";
+      g.fillText(m.spec.name, s.x, s.y - 11);
+    }
+  }
+
+  // Minyonlar
+  for (const m of world.minions) {
+    if (!m.alive) continue;
+    if (m.team !== p.team && !m.visibleTo[p.team]) continue;
+    const s = onScreen(m, headHeight(m));
+    if (!s) continue;
+    miniBar(g, s.x, s.y, 18, 3, m.hpPct, TEAM_COLORS[m.team]);
+  }
+
+  // Sampiyonlar
+  for (const c of world.champions) {
+    if (!c.alive) continue;
+    if (c.team !== p.team && !c.visibleTo[p.team]) continue;
+    const s = onScreen(c, headHeight(c));
+    if (!s) continue;
+
+    const w = 48;
+    const x = s.x - w / 2;
+    const top = s.y;
+
+    g.fillStyle = "rgba(0,0,0,0.66)";
+    g.fillRect(x - 1, top - 1, w + 2, 11);
+    g.fillStyle = TEAM_COLORS[c.team];
+    g.fillRect(x, top, w * c.hpPct, 5);
+    const sh = c.shieldAmount;
+    if (sh > 0) {
+      const sw = Math.min(w * (sh / c.stats.maxHp), w * (1 - c.hpPct));
+      g.fillStyle = "#d8f0ff";
+      g.fillRect(x + w * c.hpPct, top, sw, 5);
+    }
+    g.fillStyle = "#3f6fd8";
+    g.fillRect(x, top + 6, w * c.mpPct, 3);
+    g.strokeStyle = "rgba(255,255,255,0.3)";
+    g.lineWidth = 1;
+    g.strokeRect(x + 0.5, top + 0.5, w - 1, 4);
+
+    // Seviye rozeti
+    g.fillStyle = "#0d1622";
+    g.beginPath();
+    g.arc(x - 8, top + 4, 7.5, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "#c8a24a";
+    g.lineWidth = 1.2;
+    g.stroke();
+    g.fillStyle = "#ffe08a";
+    g.font = "bold 9px sans-serif";
+    g.fillText(String(c.level), x - 8, top + 4.5);
+
+    // Isim
+    g.font = c.isPlayer ? "bold 11px sans-serif" : "10.5px sans-serif";
+    g.lineWidth = 3;
+    g.strokeStyle = "rgba(0,0,0,0.75)";
+    g.strokeText(c.displayName(), s.x, top - 9);
+    g.fillStyle = c.isPlayer ? "#ffe08a" : "rgba(233,243,255,0.92)";
+    g.fillText(c.displayName(), s.x, top - 9);
+
+    // Durum etiketleri
+    const labels = c.effects
+      .filter((e) => e.label && e.time > 0.05)
+      .slice(0, 4)
+      .map((e) => e.label as string);
+    if (labels.length > 0) {
+      g.font = "9px sans-serif";
+      g.fillStyle = "#9fd0ff";
+      g.fillText(labels.join(" "), s.x, top + 20);
+    }
+
+    // Geri donus halkasi
+    if (c.recallTimer > 0) {
+      const pct = 1 - c.recallTimer / 7;
+      g.strokeStyle = "#8fd8ff";
+      g.lineWidth = 3;
+      g.beginPath();
+      g.arc(s.x, top + 34, 13, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
+      g.stroke();
+    }
+  }
+  g.restore();
+}
+
+export function drawFloatingText(
+  g: CanvasRenderingContext2D,
+  world: World,
+  view: View,
+): void {
+  g.save();
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  for (const t of world.fx.texts) {
+    const h = view.groundHeight(t.pos.x, t.pos.y) + 26;
+    if (view.isBehind(t.pos.x, t.pos.y, h)) continue;
+    const s = view.toScreen(t.pos.x, t.pos.y, h);
+    if (s.x < -60 || s.y < -60 || s.x > view.vw + 60 || s.y > view.vh + 60) continue;
+    const a = clamp(t.life / t.maxLife, 0, 1);
+    const rise = (1 - a) * 26;
+    g.globalAlpha = a;
+    g.font = `bold ${t.size}px sans-serif`;
+    g.lineWidth = 3;
+    g.strokeStyle = "rgba(0,0,0,0.78)";
+    g.strokeText(t.text, s.x, s.y - rise);
+    g.fillStyle = t.color;
+    g.fillText(t.text, s.x, s.y - rise);
+  }
+  g.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +315,7 @@ function drawPlayerPanel(g: CanvasRenderingContext2D, world: World, L: HudLayout
   const pr = 19;
   const pcx = x + pr + 6;
   const pcy = y + h / 2;
-  const portrait = championPortrait(p.def.id, pr * 2, TEAM_COLORS[p.team]);
+  const portrait = championPortrait(p.def.id);
   g.save();
   g.beginPath();
   g.arc(pcx, pcy, pr, 0, Math.PI * 2);
@@ -224,7 +418,7 @@ function bar(
 
 // ---------------------------------------------------------------------------
 
-function drawMinimap(g: CanvasRenderingContext2D, world: World, r: Renderer, L: HudLayout): void {
+function drawMinimap(g: CanvasRenderingContext2D, world: World, view: View, L: HudLayout): void {
   const m = L.minimap;
   const k = m.w / MAP_SIZE;
   const p = world.player;
@@ -306,12 +500,24 @@ function drawMinimap(g: CanvasRenderingContext2D, world: World, r: Renderer, L: 
     g.stroke();
   }
 
-  // Kamera cercevesi
-  const halfW = (r.vw / 2 / r.cam.scale) * k;
-  const halfH = (r.vh / 2 / r.cam.scale) * k;
+  // Kamera gorus alani (ekran koselerinin zemine izdusumu)
+  const corners = [
+    view.toWorld(0, 0),
+    view.toWorld(view.vw, 0),
+    view.toWorld(view.vw, view.vh),
+    view.toWorld(0, view.vh),
+  ];
   g.strokeStyle = "rgba(255,255,255,0.5)";
   g.lineWidth = 1;
-  g.strokeRect(m.x + r.cam.x * k - halfW, m.y + r.cam.y * k - halfH, halfW * 2, halfH * 2);
+  g.beginPath();
+  corners.forEach((c, i) => {
+    const cx = m.x + clamp(c.x, -400, MAP_SIZE + 400) * k;
+    const cy = m.y + clamp(c.y, -400, MAP_SIZE + 400) * k;
+    if (i === 0) g.moveTo(cx, cy);
+    else g.lineTo(cx, cy);
+  });
+  g.closePath();
+  g.stroke();
   g.restore();
   g.restore();
 }
@@ -533,97 +739,9 @@ function circleButton(
 
 // ---------------------------------------------------------------------------
 
-function drawAimIndicator(
-  g: CanvasRenderingContext2D,
-  world: World,
-  r: Renderer,
-  L: HudLayout,
-  ui: UiState,
-  p: Champion,
-): void {
-  const key = ui.aim.key;
-  if (!key || !p.alive) return;
-  const info = aimTarget(world, r, L, ui, p);
-  if (!info) return;
-
-  g.save();
-  g.translate(L.w / 2, L.h / 2);
-  g.scale(r.cam.scale, r.cam.scale);
-  g.translate(-r.cam.x, -r.cam.y);
-  g.globalAlpha = 0.55;
-
-  const col = key === "D" || key === "F" ? "#ffffff" : p.def.color;
-  const def = key === "D" || key === "F" ? null : p.def.abilities.find((a) => a.key === key)!;
-  const style = def?.targeting ?? "point";
-  const range = def?.range || 120;
-  const width = def?.width ?? 40;
-
-  // Menzil halkasi
-  g.strokeStyle = "rgba(255,255,255,0.35)";
-  g.lineWidth = 2;
-  g.setLineDash([8, 8]);
-  g.beginPath();
-  g.arc(p.pos.x, p.pos.y, range, 0, Math.PI * 2);
-  g.stroke();
-  g.setLineDash([]);
-
-  g.fillStyle = col;
-  g.strokeStyle = col;
-
-  if (style === "skillshot" || style === "direction") {
-    const dx = info.point.x - p.pos.x;
-    const dy = info.point.y - p.pos.y;
-    const a = Math.atan2(dy, dx);
-    g.save();
-    g.translate(p.pos.x, p.pos.y);
-    g.rotate(a);
-    g.globalAlpha = 0.32;
-    g.fillRect(0, -width / 2, range, width);
-    g.globalAlpha = 0.8;
-    g.lineWidth = 2;
-    g.strokeRect(0, -width / 2, range, width);
-    g.restore();
-  } else if (style === "cone") {
-    const a = Math.atan2(info.point.y - p.pos.y, info.point.x - p.pos.x);
-    g.globalAlpha = 0.3;
-    g.beginPath();
-    g.moveTo(p.pos.x, p.pos.y);
-    g.arc(p.pos.x, p.pos.y, range, a - 0.95, a + 0.95);
-    g.closePath();
-    g.fill();
-    g.globalAlpha = 0.8;
-    g.stroke();
-  } else if (style === "self") {
-    g.globalAlpha = 0.25;
-    g.beginPath();
-    g.arc(p.pos.x, p.pos.y, Math.max(60, range), 0, Math.PI * 2);
-    g.fill();
-  } else if (style === "unit") {
-    if (info.target) {
-      g.globalAlpha = 0.8;
-      g.lineWidth = 3;
-      g.beginPath();
-      g.arc(info.target.pos.x, info.target.pos.y, info.target.radius + 8, 0, Math.PI * 2);
-      g.stroke();
-    }
-  } else {
-    g.globalAlpha = 0.3;
-    g.beginPath();
-    g.arc(info.point.x, info.point.y, width || 60, 0, Math.PI * 2);
-    g.fill();
-    g.globalAlpha = 0.85;
-    g.lineWidth = 2;
-    g.beginPath();
-    g.arc(info.point.x, info.point.y, width || 60, 0, Math.PI * 2);
-    g.stroke();
-  }
-  g.restore();
-}
-
 /** Nisan alma girdisinden dunya hedefi hesaplar. */
 export function aimTarget(
   world: World,
-  r: Renderer,
   L: HudLayout,
   ui: UiState,
   p: Champion,

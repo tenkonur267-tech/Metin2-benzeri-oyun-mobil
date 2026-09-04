@@ -1,11 +1,9 @@
 import { sfx } from "./core/audio";
 import { clamp, dist, norm, type Vec2 } from "./core/math";
 import { castAbility, castSummoner, type AimInput } from "./game/abilities";
-import type { Champion } from "./game/champion";
 import { World } from "./game/world";
 import type { Unit } from "./game/units";
 import { computeLayout, inCircle, inRect, type HudLayout } from "./render/layout";
-import { Renderer } from "./render/renderer";
 import {
   aimTarget,
   drawHud,
@@ -14,21 +12,23 @@ import {
   type AimKey,
   type UiState,
 } from "./render/hud";
+import type { AimShape } from "./render3d/fx3d";
+import { World3D } from "./render3d/world3d";
 import { showMainMenu, showResult, showScoreboard, showShop } from "./ui/screens";
 
-type Phase = "menu" | "playing" | "shop" | "score" | "result";
+type Phase = "loading" | "menu" | "playing" | "shop" | "score" | "result";
 
 export class App {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
+  private glCanvas: HTMLCanvasElement;
+  private hudCanvas: HTMLCanvasElement;
+  private hud: CanvasRenderingContext2D;
   private overlay: HTMLElement;
-  renderer = new Renderer();
+  view: World3D;
   private ui: UiState = newUiState();
   private layout: HudLayout;
   world: World | null = null;
-  private phase: Phase = "menu";
+  private phase: Phase = "loading";
   private last = 0;
-  private raf = 0;
   private dpr = 1;
 
   private championId = "kaya";
@@ -39,13 +39,19 @@ export class App {
   private attackPointer = -1;
   private forcedTarget: Unit | null = null;
 
-  constructor(canvas: HTMLCanvasElement, overlay: HTMLElement) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d", { alpha: false })!;
+  constructor(glCanvas: HTMLCanvasElement, hudCanvas: HTMLCanvasElement, overlay: HTMLElement) {
+    this.glCanvas = glCanvas;
+    this.hudCanvas = hudCanvas;
+    this.hud = hudCanvas.getContext("2d")!;
     this.overlay = overlay;
+    this.view = new World3D(glCanvas);
     this.layout = computeLayout(window.innerWidth, window.innerHeight);
+
+    // Zayif cihazlarda golgeleri kapat
+    const lowEnd = (navigator.hardwareConcurrency ?? 4) <= 4 || window.innerWidth < 700;
+    this.view.setQuality(lowEnd ? "low" : "high");
+
     this.bindEvents();
-    // Ses tercihini hatirla
     try {
       sfx.setEnabled(localStorage.getItem("rift-sound") !== "0");
     } catch {
@@ -55,26 +61,45 @@ export class App {
       sfx.init();
       sfx.resume();
     };
-    window.addEventListener("pointerdown", unlock, { once: false });
-    window.addEventListener("keydown", unlock, { once: false });
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+
     this.resize();
-    this.openMenu();
+    this.boot();
     this.loop(performance.now());
   }
 
   // -------------------------------------------------------------------------
 
+  private async boot(): Promise<void> {
+    this.showLoading("Arazi hazirlaniyor...");
+    await new Promise((r) => setTimeout(r, 30));
+    await this.view.prepare((msg) => this.showLoading(msg));
+    this.openMenu();
+  }
+
+  private showLoading(msg: string): void {
+    this.overlay.innerHTML = `
+      <div class="screen loading">
+        <div class="loading-inner">
+          <div class="loading-logo">⚔️</div>
+          <h1>Rift Mobil</h1>
+          <div class="sub">${msg}</div>
+          <div class="loading-bar"><span></span></div>
+        </div>
+      </div>`;
+  }
+
   private bindEvents(): void {
     window.addEventListener("resize", () => this.resize());
-    window.addEventListener("orientationchange", () => setTimeout(() => this.resize(), 120));
+    window.addEventListener("orientationchange", () => setTimeout(() => this.resize(), 150));
 
-    const c = this.canvas;
+    const c = this.hudCanvas;
     c.addEventListener("pointerdown", (e) => this.onDown(e), { passive: false });
     c.addEventListener("pointermove", (e) => this.onMove(e), { passive: false });
     c.addEventListener("pointerup", (e) => this.onUp(e), { passive: false });
     c.addEventListener("pointercancel", (e) => this.onUp(e), { passive: false });
     c.addEventListener("contextmenu", (e) => e.preventDefault());
-
     window.addEventListener("keydown", (e) => this.onKey(e));
   }
 
@@ -82,16 +107,16 @@ export class App {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.canvas.width = Math.floor(w * this.dpr);
-    this.canvas.height = Math.floor(h * this.dpr);
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${h}px`;
+    this.hudCanvas.width = Math.floor(w * this.dpr);
+    this.hudCanvas.height = Math.floor(h * this.dpr);
+    this.hudCanvas.style.width = `${w}px`;
+    this.hudCanvas.style.height = `${h}px`;
     this.layout = computeLayout(w, h);
-    this.renderer.resize(w, h);
+    this.view.resize(w, h);
   }
 
   // -------------------------------------------------------------------------
-  // Ekran gecisleri
+  // Ekranlar
   // -------------------------------------------------------------------------
 
   private openMenu(): void {
@@ -113,8 +138,7 @@ export class App {
       playerChampionId: this.championId,
       difficulty: this.difficulty,
     });
-    this.renderer.cam.x = this.world.player.pos.x;
-    this.renderer.cam.y = this.world.player.pos.y;
+    this.view.attach(this.world);
     this.phase = "playing";
     this.toast("Mac basladi — koridorlari it, ana binayi yik!");
   }
@@ -172,7 +196,7 @@ export class App {
   // -------------------------------------------------------------------------
 
   private pointerPos(e: PointerEvent): Vec2 {
-    const r = this.canvas.getBoundingClientRect();
+    const r = this.hudCanvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
@@ -183,7 +207,6 @@ export class App {
     const L = this.layout;
     const ui = this.ui;
 
-    // Dugmeler
     for (const key of ["Q", "W", "E", "R"] as const) {
       if (inCircle(L.abilities[key], p.x, p.y, 6)) {
         ui.aim = { key, id: e.pointerId, origin: { ...p }, cur: { ...p }, moved: 0 };
@@ -240,7 +263,6 @@ export class App {
     }
     if (inRect(L.minimap, p.x, p.y)) return;
 
-    // Hareket cubugu
     if (inRect(L.joystickZone, p.x, p.y) || p.x < L.w * 0.5) {
       ui.joystick = { active: true, id: e.pointerId, base: { ...p }, cur: { ...p } };
     }
@@ -277,6 +299,7 @@ export class App {
       this.releaseAim(ui.aim.key);
       ui.aim.key = null;
       ui.aim.id = -1;
+      this.view.aim.hide();
     }
   }
 
@@ -284,7 +307,7 @@ export class App {
     const world = this.world!;
     const p = world.player;
     if (!p.alive) return;
-    const info = aimTarget(world, this.renderer, this.layout, this.ui, p);
+    const info = aimTarget(world, this.layout, this.ui, p);
     if (!info) return;
     const aim: AimInput = {
       point: info.point,
@@ -346,15 +369,13 @@ export class App {
       };
       this.releaseAim(ak);
       this.ui.aim.key = null;
+      this.view.aim.hide();
       return;
     }
-    if (key === " ") {
-      this.pickForcedTarget();
-    } else if (key === "b") {
-      p.alive && p.startRecall(this.world);
-    } else if (key === "p") {
-      this.openShop();
-    } else if (key === "tab") {
+    if (key === " ") this.pickForcedTarget();
+    else if (key === "b") p.alive && p.startRecall(this.world);
+    else if (key === "p") this.openShop();
+    else if (key === "tab") {
       e.preventDefault();
       this.openScore();
     }
@@ -368,17 +389,15 @@ export class App {
     const world = this.world;
     if (!world) return;
     const p = world.player;
-    const t = smartTarget(world, p, p.stats.attackRange + 150, "unit");
-    this.forcedTarget = t;
+    this.forcedTarget = smartTarget(world, p, p.stats.attackRange + 150, "unit");
   }
 
-  private controlPlayer(dt: number): void {
+  private controlPlayer(): void {
     const world = this.world!;
     const p = world.player;
     if (!p.alive) return;
     const ui = this.ui;
 
-    // Hareket
     if (ui.joystick.active) {
       const dx = ui.joystick.cur.x - ui.joystick.base.x;
       const dy = ui.joystick.cur.y - ui.joystick.base.y;
@@ -394,19 +413,14 @@ export class App {
       }
     }
 
-    // Hedefleme
     const reach = p.stats.attackRange + p.radius;
     let target: Unit | null = this.forcedTarget;
     if (target && (!target.alive || dist(target.pos, p.pos) > reach + 220)) target = null;
-
-    if (!target && ui.autoAttack) {
-      target = this.nearestAutoTarget(reach + 24);
-    }
+    if (!target && ui.autoAttack) target = this.nearestAutoTarget(reach + 24);
     if (target && !target.alive) target = null;
     this.forcedTarget = target;
     p.target = target && dist(target.pos, p.pos) <= reach + target.radius + 12 ? target : null;
 
-    // Saldiri dugmesi basiliyken hedefe yaklas
     if (this.attackHeld && target && !ui.joystick.active) {
       const d = dist(p.pos, target.pos);
       const stop = reach + target.radius - 4;
@@ -435,7 +449,6 @@ export class App {
       if (u.kind === "champion") score += 260;
       else if (u.kind === "minion") score += 60;
       else if (u.kind === "tower") score -= 60;
-      // Son vurus onceligi
       if (u.kind === "minion" && u.hp < p.stats.ad * 1.15) score += 200;
       if (score > bestScore) {
         bestScore = score;
@@ -445,43 +458,93 @@ export class App {
     return best;
   }
 
+  /** Nisan gostergesini 3B sahnede gunceller. */
+  private updateAim(): void {
+    const world = this.world;
+    const ui = this.ui;
+    if (!world || !ui.aim.key || !world.player.alive) {
+      this.view.aim.hide();
+      return;
+    }
+    const p = world.player;
+    const key = ui.aim.key;
+    const info = aimTarget(world, this.layout, ui, p);
+    if (!info) {
+      this.view.aim.hide();
+      return;
+    }
+    let shape: AimShape = "circle";
+    let range = 175;
+    let width = 55;
+    let color = 0x8fd8ff;
+    if (key === "D" || key === "F") {
+      shape = "circle";
+      range = 120;
+      width = 26;
+    } else {
+      const def = p.def.abilities.find((a) => a.key === key)!;
+      range = def.range || 150;
+      width = def.width ?? 55;
+      color = hexOf(p.def.color);
+      switch (def.targeting) {
+        case "skillshot":
+        case "direction":
+          shape = "line";
+          break;
+        case "cone":
+          shape = "cone";
+          break;
+        case "self":
+          shape = "self";
+          break;
+        case "unit":
+          shape = "unit";
+          break;
+        default:
+          shape = "circle";
+      }
+    }
+    this.view.aim.show(shape, p.pos, info.point, range, width, color);
+  }
+
   // -------------------------------------------------------------------------
   // Dongu
   // -------------------------------------------------------------------------
 
   private loop = (now: number): void => {
-    this.raf = requestAnimationFrame(this.loop);
+    requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, (now - this.last) / 1000 || 0);
     this.last = now;
 
-    const g = this.ctx;
-    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-
-    if (!this.world) {
-      g.fillStyle = "#06101c";
-      g.fillRect(0, 0, this.layout.w, this.layout.h);
-      return;
-    }
-
-    if (this.phase === "playing") {
-      this.controlPlayer(dt);
+    if (this.phase === "playing" && this.world) {
+      this.controlPlayer();
       this.world.update(dt);
       for (const t of this.ui.toast) t.life -= dt;
       this.ui.toast = this.ui.toast.filter((t) => t.life > 0);
-      if (this.world.winner !== null) {
-        this.openResult();
-      }
+      if (this.world.winner !== null) this.openResult();
     }
 
-    const p = this.world.player;
-    const follow = p.alive ? p.pos : p.pos;
-    this.renderer.centerOn(follow, this.phase === "playing" ? clamp(dt * 7, 0, 1) : 0.05);
+    const g = this.hud;
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    g.clearRect(0, 0, this.layout.w, this.layout.h);
 
-    g.fillStyle = "#040b14";
-    g.fillRect(0, 0, this.layout.w, this.layout.h);
-    this.renderer.draw(g, this.world);
+    if (!this.world || !this.view.ready) {
+      if (this.view.ready) this.view.render();
+      return;
+    }
+
+    this.view.follow(this.world.player.pos, clamp(dt * 6, 0, 1));
+    this.updateAim();
+    this.view.update(this.world, this.phase === "playing" ? dt : 0.0001);
+    this.view.render();
+
     if (this.phase === "playing" || this.phase === "shop" || this.phase === "score") {
-      drawHud(g, this.world, this.renderer, this.layout, this.ui);
+      drawHud(g, this.world, this.view, this.layout, this.ui);
     }
   };
+}
+
+function hexOf(c: string): number {
+  const n = parseInt(c.replace("#", ""), 16);
+  return Number.isNaN(n) ? 0x8fd8ff : n;
 }

@@ -146,46 +146,80 @@ src/
 │  ├─ fx          hasar sayilari, parcaciklar, halkalar
 │  └─ world       simulasyon: dalgalar, gorunurluk, olum/odul, kazanan
 ├─ render/
-│  ├─ models      sampiyon/canavar model tanimlari (renk, silah, baslik)
-│  ├─ sprites     prosedurel karakter, minyon, yapi ve canavar cizimi
-│  ├─ portrait    sprite'tan menu/HUD portresi uretimi
-│  ├─ renderer    kamera, savas sisi, birim ve efekt cizimi
-│  ├─ mapCanvas   statik harita katmani (bir kez cizilir)
-│  ├─ hud         dokunmatik kontroller, minimap, paneller
-│  └─ layout      ekran boyutuna gore dugme yerlesimi
-├─ dev/           sprite galerisi (gelistirici araci)
+│  ├─ models      sampiyon/canavar tanimlari (renk, silah tipi, baslik)
+│  ├─ hud         dokunmatik kontroller, minimap, paneller, can cubuklari
+│  ├─ layout      ekran boyutuna gore dugme yerlesimi
+│  └─ draw        2B cizim yardimcilari
+├─ render3d/
+│  ├─ scene       Three.js sahnesi, kamera, isik, golge, izdusum
+│  ├─ terrain     prosedurel arazi, kayalar, calilar, agaclar, savas sisi
+│  ├─ assets      GLB yukleme, iskelet klonlama, materyal boyama
+│  ├─ gear        prosedurel silah / baslik / pelerin / kalkan
+│  ├─ actors      sampiyon, minyon, canavar ve yapi temsilleri
+│  ├─ fx3d        mermiler, alan etkileri, parcaciklar, nisan gostergesi
+│  ├─ portrait3d  modelden menu/HUD portresi uretimi
+│  └─ world3d     oyun dunyasini sahneye baglayan katman
+├─ dev/           3B model galerisi (gelistirici araci)
 ├─ ui/            DOM ekranlari (menu, magaza, skor, sonuc)
 └─ app.ts         girdi + oyun dongusu
 scripts/          harita dogrulama ve denge simulasyonu araclari
 ```
 
-### Grafikler ve animasyon
-Oyunda **hazir gorsel dosyasi yoktur**; her sey Canvas 2D ile prosedurel cizilir:
+### Grafikler — gercek 3B
+Oyun **Three.js / WebGL** ile 3B olarak cizilir. Oyun mantigi 2B calisir
+(x, y); cizim katmani bunu 3B sahneye baglar (X = x, Z = y, Y = yukseklik).
 
-- `render/models.ts` — her sampiyonun "modeli": govde/aksan/ten/sac renkleri,
-  silah tipi (buyuk kilic, balta, yay, asa, hancer, mizrak...), baslik
-  (kukuleta, migfer, boynuz, tac, maske), yapi (agir/orta/ince), pelerin, aura.
-- `render/sprites.ts` — tepeden gorunum karakter cizimi: golge, bacaklar,
-  pelerin, govde, omuzluklar, kollar, silah ve en ustte bas ayri ayri cizilir.
-  Ayni dosyada minyon, kule, engelleyici, ana bina ve orman canavari cizimleri
-  de bulunur.
-- **Animasyon durumlari:** duruş (nefes), yuruyus (bacak + govde dongusu),
-  saldiri hazirligi (silah geri cekilir / yay gerilir), vurus (savurma),
-  yetenek kullanma (kollar yukari + dalga), hasar parlamasi, olum.
-  Durumlar `Unit.tickAnim()` icinde tutulan `walkPhase / swing / windup /
-  hitFlash` alanlarindan turetilir.
-- **Kuleler** hedeflerine donen taret basina, hasar aldikca catlaklara ve
-  ates ederken geri tepmeye sahiptir; ana bina donen kristal ve yorunge
-  parcalariyla cizilir.
-- Menu kartlarindaki ve HUD'daki portreler ayni sprite'tan uretilir
-  (`render/portrait.ts`), boylece secim ekrani ile oyun ici gorunum birebir ayni olur.
+**Karakter modelleri** acik lisansli (CC0) hazir varliklardir:
 
-Tum sprite'lari poz poz gormek icin gelistirici sayfasi:
-`npm run dev` → <http://localhost:5173/sprites.html>
+| Model | Kullanim | Yaratici | Lisans |
+| --- | --- | --- | --- |
+| `champion.glb` (RobotExpressive) | 8 sampiyonun ortak iskeletli govdesi | Tomás Laulhé (Quaternius) / Don McCurdy | CC0 1.0 |
+| `beast.glb` (Fox) | orman canavarlari ve ejderhalar | PixelMannen / Tom Kranis / AsoboStudio | CC0 1.0 |
+
+Ayrintilar: `public/models/CREDITS.md`.
+
+Sampiyonlar ayni iskeleti paylasir ama **hicbiri ayni gorunmez**:
+- Govde, aksan ve golge renkleri sampiyona gore materyal bazinda degistirilir.
+- **Silahlar kodla uretilip el kemigine takilir** (`Palm2R`): buyuk kilic, kilic,
+  balta, asa, deynek, yay, hancer, mizrak, pence — 9 tip.
+- **Basliklar** kafa kemigine takilir: kukuleta, migfer, boynuz, tac, maske.
+- Kalkan/hancer/kure sol ele, pelerin govde kemigine baglanir.
+- Isik veren kureler, aura halkalari ve kalkan kubbesi ayri katmanlardir.
+
+**Animasyonlar** modelin kendi iskelet animasyonlaridir; oyun durumundan
+turetilen bir durum makinesi ile calisir: `Idle` (bekleme), `Walking` /
+`Running` (hiza gore), `Punch` (saldiri), `Wave` (yetenek), `Death` (olum).
+Canavarlar `Survey` / `Walk` / `Run` kullanir.
+
+**Harita tamamen prosedureldir** — disaridan alinan harita gorseli yoktur:
+- Yukseklik alani: koridorlar duz ve alcak, orman tepelik, nehir cukur,
+  usler yukseltilmis platform, harita kenari yukselen kayalik.
+- Kose renkleri (vertex color) ile toprak yol / cimen / nehir yatagi / us
+  renkleri gecisli boyanir.
+- 190x190 bolmeli tek zemin mesh'i + saydam su yuzeyi.
+- Duvarlar dodekahedron kaya kumeleri, calilar yari saydam yaprak kumeleri,
+  ~260 agac `InstancedMesh` ile tek cizim cagrisinda.
+- Kuleler, engelleyiciler ve ana bina tamamen kodla modellenir: kule hedefe
+  donen taret basina, geri tepmeye ve hasar aldikca sonen kristale sahiptir.
+
+**Savas sisi** zemin materyaline enjekte edilen bir shader ile calisir:
+96x96'lik bir gorus dokusu her karede muttefik gorus alanlarindan uretilir,
+kesfedilmemis bolgeler karartilir, kesfedilmis ama su an gorulmeyen bolgeler
+sonuk gosterilir.
+
+**HUD** ayri bir 2B tuvalde cizilir; can cubuklari ve isimler 3B konumlarin
+kamera izdusumu ile yerlestirilir. Nisan gostergeleri (cizgi, koni, daire)
+zeminde 3B olarak cizilir.
+
+Tum modelleri, silahlari ve animasyonlari incelemek icin:
+`npm run dev` → <http://localhost:5173/models.html>
 
 ### Tasarim notlari
-- **Tek dosyalik varlik yok:** tum grafikler ve sesler calisma aninda uretilir
-  (Canvas 2D + WebAudio), bu yuzden uygulama paketi cok kucuktur.
+- **Neredeyse hicbir hazir varlik yok:** iki CC0 karakter modeli disinda
+  arazi, yapilar, silahlar, efektler, arayuz ve tum sesler calisma aninda
+  uretilir. Uretim paketi ~1.6 MB (215 KB gzip kod + 624 KB model).
+- **WebGL gerekir.** Modern her mobil tarayici destekler; golgeler dusuk
+  guclu cihazlarda otomatik kapatilir.
 - **Harita simetrisi:** koridorlar iki takim icin ayni fiziksel yoldur; kirmizi
   takim ters yonde yurur. Nokta-simetri ust/alt koridoru yer degistirdigi icin
   yapi konumlari aynalanirken koridor etiketi de degisir (`swapLane`).

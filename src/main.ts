@@ -1,10 +1,11 @@
 import "./styles.css";
 import { App } from "./app";
 
-const canvas = document.getElementById("game") as HTMLCanvasElement;
+const glCanvas = document.getElementById("game") as HTMLCanvasElement;
+const hudCanvas = document.getElementById("hud") as HTMLCanvasElement;
 const overlay = document.getElementById("overlay") as HTMLElement;
 
-const app = new App(canvas, overlay);
+const app = new App(glCanvas, hudCanvas, overlay);
 
 // Gelistirme/hata ayiklama icin erisim
 (window as unknown as Record<string, unknown>).__rift = app;
