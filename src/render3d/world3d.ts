@@ -6,7 +6,6 @@ import * as THREE from "three";
 import { clamp, type Vec2 } from "../core/math";
 import { MAP_SIZE } from "../game/constants";
 import type { World } from "../game/world";
-import type { Champion } from "../game/champion";
 import { ChampionActor, MinionField, MonsterActor, StructureActor } from "./actors";
 import { AimIndicator, Fx3D } from "./fx3d";
 import { loadModel, type LoadedModel } from "./assets";

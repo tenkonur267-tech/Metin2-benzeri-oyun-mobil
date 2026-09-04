@@ -1,6 +1,6 @@
 import { sfx } from "../core/audio";
-import { clamp, dist, type Vec2 } from "../core/math";
-import { CONFIG, NEXUS_POS, RADIUS, SPAWN_POS, XP_TABLE, levelFromXp } from "./constants";
+import { clamp, dist } from "../core/math";
+import { CONFIG, NEXUS_POS, RADIUS, SPAWN_POS, levelFromXp } from "./constants";
 import { getItem, MAX_ITEMS } from "./items";
 import { emptyStats, Unit } from "./units";
 import type { AbilityState, ChampionDef, ItemDef, Stats, Team } from "./types";

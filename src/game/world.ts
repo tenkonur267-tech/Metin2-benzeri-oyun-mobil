@@ -20,7 +20,7 @@ import { Champion } from "./champion";
 import { Fx } from "./fx";
 import { findPath, hasLineOfSight } from "./grid";
 import { Minion, Monster, Structure, Unit, resetIds } from "./units";
-import { makeProjectile, makeZone, type Projectile, type Zone } from "./projectile";
+import { makeProjectile, type Projectile, type Zone } from "./projectile";
 import type { CombatEvent, Lane, MinionKind, Team } from "./types";
 
 export interface WorldOptions {

@@ -1,5 +1,5 @@
 import { sfx } from "../core/audio";
-import { clamp, dirTo, dist, inCone, norm, rad, type Vec2 } from "../core/math";
+import { clamp, dirTo, dist, inCone, rad, type Vec2 } from "../core/math";
 import type { Champion } from "./champion";
 import { isBlockedCircle } from "./grid";
 import { makeProjectile, makeZone } from "./projectile";

@@ -1,6 +1,6 @@
 import { sfx } from "../core/audio";
 import { clamp, type Vec2 } from "../core/math";
-import { CONFIG, LANES, MAP_SIZE, TEAM_COLORS, lanePath } from "../game/constants";
+import { LANES, MAP_SIZE, TEAM_COLORS, lanePath } from "../game/constants";
 import type { Champion } from "../game/champion";
 import type { World } from "../game/world";
 import type { HudLayout } from "./layout";

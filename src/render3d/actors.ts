@@ -11,7 +11,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { clamp } from "../core/math";
 import { TEAM_COLORS, TEAM_COLORS_DARK } from "../game/constants";
 import type { Champion } from "../game/champion";
-import type { Minion, Monster, Structure, Unit } from "../game/units";
+import type { Minion, Monster, Structure } from "../game/units";
 import { championModel, creatureModel, type CharModel } from "../render/models";
 import { instantiate, findBone, tintAll, tintByMaterialName, type LoadedModel } from "./assets";
 import { buildCape, buildHeadgear, buildOffhand, buildTeamRing, buildWeapon, colorOf } from "./gear";
