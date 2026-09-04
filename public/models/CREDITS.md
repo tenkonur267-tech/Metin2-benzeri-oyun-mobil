@@ -1,47 +1,39 @@
 # 3B Model Kaynaklari
 
-Bu klasordeki tum modeller acik lisansli, ucretsiz hazir varliklardir.
-`node scripts/fetch-assets.mjs` (veya `npm run assets:fetch`) komutu bunlari
-kaynagindan indirir, mobil icin optimize eder (WebP doku, meshopt sikistirma)
-ve buraya yazar.
+Oyundaki tum karakterler, silahlar, yapilar ve harita susleri hazir
+**KayKit** paketlerinden gelir. Uc paket de **CC0 1.0** (kamu mali)
+lisanslidir: kisisel ve ticari kullanim serbest, atif zorunlu degil.
+Yine de yaraticiya tesekkur olarak burada belirtilmistir.
 
-## Karakterler ve canavarlar
+**Yaratici:** Kay Lousberg — [kaylousberg.itch.io](https://kaylousberg.itch.io/)
 
-| Dosya | Kaynak | Yaratici | Lisans |
-| --- | --- | --- | --- |
-| `champion.glb` | [three.js — RobotExpressive](https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf/RobotExpressive) | [Tomás Laulhé (Quaternius)](https://www.patreon.com/quaternius), donusturme [Don McCurdy](https://donmccurdy.com/) | **CC0 1.0** |
-| `beast.glb` | [glTF Sample Assets — Fox](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Fox) | PixelMannen (model), Tom Kranis (rig/animasyon), AsoboStudio & Scurest (donusturme) | **CC0 1.0** |
+| Paket | Depo | Oyunda kullanilan |
+| --- | --- | --- |
+| Adventurers Character Pack | [KayKit-Character-Pack-Adventures-1.0](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0) | Sampiyonlar (`champ-*.glb`) ve silahlar (kilic, balta, hancer, asa, degnek, arbalet, kalkan, buyu kitabi) |
+| Skeletons Character Pack | [KayKit-Character-Pack-Skeletons-1.0](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0) | Minyonlar (`minion-*.glb`) ve orman canavarlari (`monster-*.glb`) |
+| Medieval Hexagon Pack | [KayKit-Medieval-Hexagon-Pack-1.0](https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0) | Kuleler, engelleyiciler, ana bina, us binalari (`tower-*`, `inhibitor-*`, `nexus-*`, `house-*`, `church-*`, `market-*`, `well-*`) ve doga (`tree-*`, `trees-*`, `rock-*`, `mountain-*`, `waterplant-*`) |
 
-## Harita, yapilar ve silahlar
-
-Asagidaki modeller [BabylonJS/Assets](https://github.com/BabylonJS/Assets)
-deposundan alinmistir — **CC BY 4.0**, © Babylon.js / Michel Rousseau.
-
-| Dosya | Kaynak dosya |
-| --- | --- |
-| `tree-1` … `tree-8` | `meshes/graveYardPack/tree1…tree8` |
-| `tree-9`, `tree-10` | `meshes/villagePack/tree1`, `tree2` |
-| `bush-1` … `bush-4` | `meshes/villagePack/bush1…bush4` |
-| `rock-1` … `rock-4` | `meshes/villagePack/rocks1…rocks4` |
-| `stump`, `log` | `meshes/villagePack/stump`, `hollowLog` |
-| `stump-2` | `meshes/graveYardPack/stump1` |
-| `tower`, `tower-2` | `meshes/graveYardPack/obelisk1`, `obelisk2` |
-| `inhibitor` | `meshes/graveYardPack/mausoleumSmall` |
-| `nexus` | `meshes/graveYardPack/mausoleumLarge` |
-| `cottage`, `well`, `lightpost` | `meshes/villagePack/cottage`, `waterwell`, `lightPost1` |
-| `wall`, `wall-arch`, `fence` | `meshes/villagePack/wall`, `wallArch`, `fence` |
-| `fence-2` | `meshes/graveYardPack/fenceASection1` |
-| `weapon-sword`, `weapon-axe`, `weapon-dagger` | `meshes/Demos/weaponsDemo/meshes/runeSword`, `frostAxe_noMorph`, `moltenDagger` |
-
-CC BY 4.0 atif zorunludur; bu dosya ve oyun icindeki kunye bu atfi saglar.
-CC0 varliklar icin atif zorunlu degildir, tesekkur olarak belirtilmistir.
+Yapilar mavi ve kirmizi olmak uzere iki takim renginde indirilir; oyunda
+renk degistirilmez, paketteki hazir varyantlar kullanilir.
 
 ## Dokular
 
-`public/textures/` altindaki `grass`, `dirt`, `rock`, `sand` dokulari
+`public/textures/` altindaki `grass`, `dirt`, `rock`, `sand` zemin dokulari
 [ambientCG](https://ambientcg.com/) **CC0** kutuphanesinden alinmis ve
 512 piksel WebP olarak yeniden kodlanmistir.
 
+## Varliklari yeniden indirme
+
+```
+npm run assets:fetch
+```
+
+`scripts/fetch-assets.mjs` dosyalari kaynagindan indirir, karakterlerde
+kullanilmayan animasyon kliplerini atar (`scripts/strip-anims.mjs`) ve
+hepsini mobil icin optimize eder (256 piksel WebP doku + meshopt
+sikistirma). Ham 40 MB -> yaklasik 4.5 MB.
+
 ## Geri kalanlar
 
-Efektler, arayuz, sesler ve arazi yukseklik alani bu depoda kodla uretilir.
+Arazi yukseklik alani, savas sisi, efektler, sesler ve arayuz bu depoda
+kodla uretilir.

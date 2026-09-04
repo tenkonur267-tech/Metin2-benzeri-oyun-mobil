@@ -60,7 +60,9 @@ jobs:
           echo "APK boyutu: $(du -h "$APK" | cut -f1)"
           # Zorunlu bilesenler pakette mi?
           for entry in AndroidManifest.xml classes.dex assets/public/index.html \
-                       assets/public/models/champion.glb assets/public/models/beast.glb; do
+                       assets/public/models/champ-knight.glb \
+                       assets/public/models/minion-melee.glb \
+                       assets/public/models/nexus-blue.glb; do
             if ! unzip -l "$APK" | grep -q "$entry"; then
               echo "HATA: APK icinde $entry yok"
               unzip -l "$APK" | head -40

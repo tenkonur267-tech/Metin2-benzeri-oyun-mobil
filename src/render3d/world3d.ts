@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { clamp, type Vec2 } from "../core/math";
 import { MAP_SIZE } from "../game/constants";
 import type { World } from "../game/world";
-import { ChampionActor, MinionField, MonsterActor, STRUCTURE_PROPS, StructureActor } from "./actors";
+import { BASE_PROPS, ChampionActor, MinionField, MonsterActor, STRUCTURE_PROPS, StructureActor } from "./actors";
 import { AimIndicator, Fx3D } from "./fx3d";
 import { loadModel, type LoadedModel } from "./assets";
 import { Stage } from "./scene";
@@ -19,6 +19,13 @@ import {
   type TerrainBuild,
 } from "./terrain";
 import { PropLibrary } from "./props";
+import {
+  CHAMPION_MODEL_FILES,
+  MINION_MODELS,
+  MINION_WEAPONS,
+  MONSTER_MODELS,
+  loadoutOf,
+} from "./loadout";
 
 export class World3D {
   readonly stage: Stage;
@@ -27,8 +34,9 @@ export class World3D {
 
   private terrain: TerrainBuild | null = null;
   private props = new PropLibrary();
-  private champModel: LoadedModel | null = null;
-  private beastModel: LoadedModel | null = null;
+  /** Yuklenen iskeletli karakter modelleri (dosya adi -> model). */
+  private characters = new Map<string, LoadedModel>();
+  private loaded = false;
 
   private champions = new Map<number, ChampionActor>();
   private monsters = new Map<number, MonsterActor>();
@@ -55,7 +63,7 @@ export class World3D {
   /** Modelleri ve araziyi hazirlar. */
   async prepare(onProgress?: (msg: string) => void): Promise<void> {
     onProgress?.("Harita modelleri yukleniyor...");
-    const names = [...new Set([...PROP_NAMES, ...STRUCTURE_PROPS])];
+    const names = [...new Set([...PROP_NAMES, ...STRUCTURE_PROPS, ...BASE_PROPS, ...Object.values(MINION_WEAPONS)])];
     await this.props.load(names, (done, total) => {
       onProgress?.(`Harita modelleri yukleniyor... ${done}/${total}`);
     });
@@ -64,30 +72,58 @@ export class World3D {
     applyVisionToProps(this.terrain.decor, this.terrain.visionTexture);
     this.stage.scene.add(this.terrain.group);
     onProgress?.("Karakter modelleri yukleniyor...");
-    const [champ, beast] = await Promise.all([loadModel("champion.glb"), loadModel("beast.glb")]);
-    this.champModel = champ;
-    this.beastModel = beast;
+    const charFiles = [
+      ...new Set([
+        ...CHAMPION_MODEL_FILES,
+        ...Object.values(MINION_MODELS),
+        ...MONSTER_MODELS,
+      ]),
+    ];
+    let done = 0;
+    for (const file of charFiles) {
+      this.characters.set(file, await loadModel(`${file}.glb`));
+      onProgress?.(`Karakter modelleri yukleniyor... ${++done}/${charFiles.length}`);
+    }
+    this.minions.build(this.characters, this.weaponSources());
+
     onProgress?.("Portreler hazirlaniyor...");
-    buildPortraits(champ);
+    buildPortraits(this.characters);
+    this.loaded = true;
     onProgress?.("Hazir");
   }
 
+  /** Minyonlarin eline takilacak hazir silahlarin sablonlari. */
+  private weaponSources(): Map<string, THREE.Object3D> {
+    const out = new Map<string, THREE.Object3D>();
+    for (const name of new Set(Object.values(MINION_WEAPONS))) {
+      if (!this.props.has(name)) continue;
+      out.set(name, this.props.clone(name, 6));
+    }
+    return out;
+  }
+
   get ready(): boolean {
-    return !!this.champModel && !!this.beastModel && !!this.terrain;
+    return this.loaded && !!this.terrain;
   }
 
   /** Yeni mac icin sahneyi kurar. */
   attach(world: World): void {
     this.clearMatch();
-    if (!this.champModel || !this.beastModel) return;
+    if (!this.loaded) return;
 
     for (const c of world.champions) {
-      const a = new ChampionActor(c, this.champModel, c.isPlayer);
+      const lo = loadoutOf(c.def.id);
+      const model = this.characters.get(lo.model);
+      if (!model) continue;
+      const a = new ChampionActor(c, model, lo, c.isPlayer);
       this.champions.set(c.id, a);
       this.matchGroup.add(a.root);
     }
     for (const m of world.monsters) {
-      const a = new MonsterActor(m, this.beastModel);
+      const file = m.spec.epic ? MONSTER_MODELS[0] : MONSTER_MODELS[(m.id % 2) + 1];
+      const model = this.characters.get(file) ?? this.characters.get(MONSTER_MODELS[0]);
+      if (!model) continue;
+      const a = new MonsterActor(m, model);
       this.monsters.set(m.id, a);
       this.matchGroup.add(a.root);
     }
@@ -160,7 +196,7 @@ export class World3D {
     for (const s of world.structures) {
       this.structures.get(s.id)?.update(this.time);
     }
-    this.minions.update(world.minions, team, this.time);
+    this.minions.update(world.minions, team, dt);
     this.fx.update(world, this.time);
 
     if (++this.visionFrame % 2 === 0) this.updateVision(world);

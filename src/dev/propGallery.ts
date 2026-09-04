@@ -6,7 +6,17 @@ import * as THREE from "three";
 import { PropLibrary } from "../render3d/props";
 import { PROP_NAMES } from "../render3d/terrain";
 
-const EXTRA = ["tower", "tower-2", "inhibitor", "nexus", "weapon-sword", "weapon-axe", "weapon-dagger"];
+const EXTRA = [
+  "tower-a-blue", "tower-b-blue", "tower-c-blue", "inhibitor-blue", "nexus-blue",
+  "tower-a-red", "nexus-red",
+  "house-a-blue", "house-b-blue", "church-blue", "market-blue", "well-blue",
+  "sword-1handed", "sword-2handed", "axe-2handed", "dagger", "staff", "wand",
+  "crossbow-2handed", "shield-round", "spellbook-closed",
+];
+const CHARACTERS = [
+  "champ-knight", "champ-barbarian", "champ-rogue", "champ-hooded", "champ-mage",
+  "minion-melee", "minion-caster", "minion-small", "monster-rogue",
+];
 const NAMES = [...PROP_NAMES, ...EXTRA];
 const SIZE = 190;
 

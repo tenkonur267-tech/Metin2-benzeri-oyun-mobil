@@ -57,6 +57,9 @@ const smooth = (edge0: number, edge1: number, x: number): number => {
 
 const LANE_HALF = 30;
 const LANE_FADE = 62;
+// Zemin boyamasinda koridor bandi daha dar tutulur ki yol net gorunsun.
+const LANE_PAINT_HALF = 24;
+const LANE_PAINT_FADE = 44;
 const RIVER_HALF = 30;
 const RIVER_FADE = 58;
 const BASE_R = 135;
@@ -90,12 +93,12 @@ export function terrainHeight(x: number, y: number): number {
 }
 
 const C_LANE = new THREE.Color(0xa89468);
-const C_GRASS = new THREE.Color(0x6f9c58);
-const C_GRASS_DARK = new THREE.Color(0x4d7742);
+const C_GRASS = new THREE.Color(0x74a659);
+const C_GRASS_DARK = new THREE.Color(0x5d8b4b);
 const C_RIVER = new THREE.Color(0x5f8f9e);
 const C_BASE_BLUE = new THREE.Color(0x4f86bd);
 const C_BASE_RED = new THREE.Color(0xb16055);
-const C_ROCK = new THREE.Color(0x8a8f96);
+const C_ROCK = new THREE.Color(0x9aa2ab);
 
 /** Zemin rengi ve doku karisim agirliklari (cimen, toprak, kaya). */
 function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3): void {
@@ -103,12 +106,12 @@ function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3
   const dr = riverDist(x, y);
   const n = noise2(x * 1.7, y * 1.7);
 
-  const laneT = smooth(LANE_HALF, LANE_FADE, dl);
+  const laneT = smooth(LANE_PAINT_HALF, LANE_PAINT_FADE, dl);
   const riverT = dr < RIVER_FADE ? smooth(RIVER_HALF * 0.7, RIVER_FADE, dr) : 1;
   const edge = Math.min(x, y, MAP_SIZE - x, MAP_SIZE - y);
   const edgeT = smooth(20, 52, edge);
 
-  color.copy(C_GRASS).lerp(C_GRASS_DARK, n);
+  color.copy(C_GRASS).lerp(C_GRASS_DARK, n * 0.55);
   color.lerp(C_LANE, 1 - laneT);
   color.lerp(C_RIVER, 1 - riverT);
   for (const team of [0, 1] as const) {
@@ -116,7 +119,7 @@ function groundAt(x: number, y: number, color: THREE.Color, blend: THREE.Vector3
     const d = Math.hypot(x - p.x, y - p.y);
     if (d < BASE_R) {
       const t = smooth(BASE_R * 0.6, BASE_R, d);
-      color.lerp(team === 0 ? C_BASE_BLUE : C_BASE_RED, (1 - t) * 0.6);
+      color.lerp(team === 0 ? C_BASE_BLUE : C_BASE_RED, (1 - t) * 0.45);
     }
   }
   color.lerp(C_ROCK, 1 - edgeT);
@@ -146,12 +149,12 @@ const VISION_SIZE = 96;
 
 /** Harita dekorunda kullanilan hazir modeller. */
 export const PROP_NAMES = [
-  "tree-1", "tree-2", "tree-3", "tree-4", "tree-5",
-  "tree-6", "tree-7", "tree-8", "tree-9", "tree-10",
-  "bush-1", "bush-2", "bush-3", "bush-4",
-  "rock-1", "rock-2", "rock-3", "rock-4",
-  "stump", "stump-2", "log",
-  "cottage", "lightpost", "well", "fence", "fence-2", "wall", "wall-arch",
+  "tree-single-a", "tree-single-b",
+  "trees-a-small", "trees-a-medium", "trees-a-large",
+  "trees-b-small", "trees-b-medium", "trees-b-large",
+  "rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e",
+  "mountain-a", "mountain-b", "mountain-c",
+  "waterplant-a", "waterplant-b",
 ];
 
 export function buildTerrain(props: PropLibrary): TerrainBuild {
@@ -218,9 +221,6 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   group.add(water);
 
   // --- Hazir modellerle dekor ---
-  // Mezarlik duvarlari mor tonlu geliyor; us duvari icin tas rengine cekilir.
-  if (props.has("wall")) props.tint("wall", 0x8d8b84, 0.72);
-  if (props.has("wall-arch")) props.tint("wall-arch", 0x8d8b84, 0.72);
   const decor = new THREE.Group();
   decor.add(buildRockWalls(props, rng));
   decor.add(buildBushClusters(props, rng));
@@ -300,8 +300,8 @@ uniform float uMapSize;`,
            + texture2D(uDirt,  uvA).rgb * vBlend.y
            + texture2D(uRock,  uvB).rgb * vBlend.z;
   float detail = dot(tex, vec3(0.3333));
-  gl_FragColor.rgb *= (0.55 + 1.05 * detail);
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * tex * 2.1, 0.45);
+  gl_FragColor.rgb *= (0.78 + 0.48 * detail);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * tex * 2.2, 0.3);
 
   float vis = texture2D(uVision, vWorldPos.xz / uMapSize).r;
   gl_FragColor.rgb *= mix(0.3, 1.0, clamp(vis, 0.0, 1.0));
@@ -405,14 +405,14 @@ function instancePlacements(props: PropLibrary, list: Placement[]): THREE.Group 
   return g;
 }
 
-// Model gruplari (bkz. props.html galerisi)
-const LEAFY = ["tree-9", "tree-10"];
-const PINE = ["bush-2", "bush-3"];
-const DEAD = ["tree-1", "tree-2", "tree-3", "tree-4", "tree-5", "tree-6", "tree-7", "tree-8"];
-const BUSH = ["bush-1"];
-const GRASS = ["bush-4"];
-const GREY_ROCK = ["rock-2", "rock-3", "rock-4"];
-const RED_ROCK = ["rock-1"];
+// Model gruplari (hepsi KayKit Medieval Hexagon Pack, CC0)
+const BIG_TREES = ["trees-a-large", "trees-b-large"];
+const MID_TREES = ["trees-a-medium", "trees-b-medium"];
+const SMALL_TREES = ["trees-a-small", "trees-b-small"];
+const SINGLE_TREES = ["tree-single-a", "tree-single-b"];
+const ROCKS = ["rock-single-a", "rock-single-b", "rock-single-c", "rock-single-d", "rock-single-e"];
+const MOUNTAINS = ["mountain-a", "mountain-b", "mountain-c"];
+const WATERPLANTS = ["waterplant-a", "waterplant-b"];
 
 /** Modeli istenen yukseklige olceklendirip yerlesim kaydi olusturur. */
 function place(
@@ -421,148 +421,121 @@ function place(
   x: number,
   y: number,
   height: number,
-  rng: Rng,
-  tilt = 0,
+  rot: number,
 ): Placement {
   return {
     model,
     x,
     y,
     scale: height / (props.has(model) ? props.height(model) : 1),
-    rot: rng.range(0, Math.PI * 2),
-    tiltX: tilt ? rng.range(-tilt, tilt) : 0,
-    tiltZ: tilt ? rng.range(-tilt, tilt) : 0,
+    rot,
   };
 }
 
-/** Gecilmez duvarlari kaya yiginlariyla doldurur. */
+/**
+ * Gecilmez duvarlar: dikdortgenin uzun ekseni boyunca kaya/tepe dizisi.
+ * Duvarin nerede oldugu tek bakista anlasilsin diye siralidir.
+ */
 function buildRockWalls(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
   for (const w of WALLS) {
-    const long = Math.max(w.w, w.h);
-    const count = Math.max(4, Math.round(long / 18));
-    for (let i = 0; i < count; i++) {
-      const model = rng.chance(0.18) ? rng.pick(RED_ROCK) : rng.pick(GREY_ROCK);
+    const horizontal = w.w >= w.h;
+    const long = horizontal ? w.w : w.h;
+    const steps = Math.max(2, Math.round(long / 34));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = horizontal ? w.x + t * w.w : w.x + w.w / 2;
+      const y = horizontal ? w.y + w.h / 2 : w.y + t * w.h;
+      const big = i % 2 === 0;
       list.push(place(
-        props, model,
-        w.x + rng.range(2, w.w - 2),
-        w.y + rng.range(2, w.h - 2),
-        rng.range(18, 30),
-        rng, 0.1,
-      ));
-    }
-    // Kaya siralarinin arasina birkac olu agac
-    for (let i = 0; i < Math.max(1, Math.round(long / 90)); i++) {
-      list.push(place(
-        props, rng.pick(DEAD),
-        w.x + rng.range(2, w.w - 2), w.y + rng.range(2, w.h - 2),
-        rng.range(40, 60), rng, 0.05,
+        props,
+        rng.pick(MOUNTAINS),
+        x, y,
+        big ? 36 : 27,
+        rng.range(0, Math.PI * 2),
       ));
     }
   }
   return instancePlacements(props, list);
 }
 
-/** Calilari (gizlenme alanlari) hazir cali modelleriyle doldurur. */
+/** Calilar (gizlenme alanlari): sik kucuk agac obekleri. */
 function buildBushClusters(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
   for (const b of BUSHES) {
-    const count = 9 + Math.floor(rng.next() * 5);
+    const count = Math.max(5, Math.round((b.r * Math.PI * 2) / 22));
     for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + rng.range(-0.5, 0.5);
-      const rr = b.r * rng.range(0.1, 0.9);
+      const a = (i / count) * Math.PI * 2;
       list.push(place(
-        props, rng.pick(BUSH),
-        b.x + Math.cos(a) * rr, b.y + Math.sin(a) * rr,
-        rng.range(15, 23), rng,
+        props, rng.pick(SMALL_TREES),
+        b.x + Math.cos(a) * b.r * 0.7,
+        b.y + Math.sin(a) * b.r * 0.7,
+        20, rng.range(0, Math.PI * 2),
       ));
     }
-    // Kenarlara ot tutamlari
-    for (let i = 0; i < 6; i++) {
-      const a = rng.range(0, Math.PI * 2);
-      list.push(place(
-        props, rng.pick(GRASS),
-        b.x + Math.cos(a) * b.r * rng.range(0.6, 1.05),
-        b.y + Math.sin(a) * b.r * rng.range(0.6, 1.05),
-        rng.range(7, 12), rng,
-      ));
-    }
+    list.push(place(props, rng.pick(SMALL_TREES), b.x, b.y, 22, rng.range(0, Math.PI * 2)));
   }
   return instancePlacements(props, list);
 }
 
-/** Ormani agac modelleriyle doldurur. */
+/** Orman: koridorlardan ve nehirden uzak, seyrek agac obekleri. */
 function buildForest(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
   const taken: Vec2[] = [];
 
   const free = (x: number, y: number, gap: number): boolean => {
-    if (laneDist(x, y) < 54) return false;
-    if (riverDist(x, y) < 46) return false;
-    if (Math.hypot(x - NEXUS_POS[0].x, y - NEXUS_POS[0].y) < 165) return false;
-    if (Math.hypot(x - NEXUS_POS[1].x, y - NEXUS_POS[1].y) < 165) return false;
-    if (WALLS.some((w) => x > w.x - 14 && x < w.x + w.w + 14 && y > w.y - 14 && y < w.y + w.h + 14)) return false;
-    if (BUSHES.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 14)) return false;
-    if (CAMPS.some((cm) => Math.hypot(cm.pos.x - x, cm.pos.y - y) < 48)) return false;
+    if (laneDist(x, y) < 62) return false;
+    if (riverDist(x, y) < 52) return false;
+    if (Math.hypot(x - NEXUS_POS[0].x, y - NEXUS_POS[0].y) < 178) return false;
+    if (Math.hypot(x - NEXUS_POS[1].x, y - NEXUS_POS[1].y) < 178) return false;
+    if (WALLS.some((w) => x > w.x - 26 && x < w.x + w.w + 26 && y > w.y - 26 && y < w.y + w.h + 26)) return false;
+    if (BUSHES.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 24)) return false;
+    if (CAMPS.some((cm) => Math.hypot(cm.pos.x - x, cm.pos.y - y) < 58)) return false;
     return !taken.some((t) => Math.hypot(t.x - x, t.y - y) < gap);
   };
 
-  // Buyuk yaprakli agaclar
-  for (let attempt = 0; attempt < 6000 && list.length < 150; attempt++) {
-    const x = rng.range(30, MAP_SIZE - 30);
-    const y = rng.range(30, MAP_SIZE - 30);
-    if (!free(x, y, 34)) continue;
+  for (let attempt = 0; attempt < 9000 && list.length < 110; attempt++) {
+    const x = rng.range(36, MAP_SIZE - 36);
+    const y = rng.range(36, MAP_SIZE - 36);
+    if (!free(x, y, 52)) continue;
     taken.push({ x, y });
-    list.push(place(props, rng.pick(LEAFY), x, y, rng.range(58, 92), rng, 0.04));
+    const roll = rng.next();
+    const model = roll < 0.4 ? rng.pick(BIG_TREES) : roll < 0.8 ? rng.pick(MID_TREES) : rng.pick(SINGLE_TREES);
+    const height = roll < 0.4 ? rng.range(52, 66) : roll < 0.8 ? rng.range(40, 52) : rng.range(30, 40);
+    list.push(place(props, model, x, y, height, rng.range(0, Math.PI * 2)));
   }
 
-  // Cam agaclari ve olu agaclar (ara dolgu)
-  for (let attempt = 0; attempt < 6000 && list.length < 330; attempt++) {
-    const x = rng.range(30, MAP_SIZE - 30);
-    const y = rng.range(30, MAP_SIZE - 30);
-    if (!free(x, y, 19)) continue;
-    taken.push({ x, y });
-    const pine = rng.chance(0.55);
-    list.push(place(
-      props, pine ? rng.pick(PINE) : rng.pick(DEAD),
-      x, y,
-      pine ? rng.range(34, 52) : rng.range(38, 58),
-      rng, 0.05,
-    ));
-  }
-
-  // Zemin detayi: kutuk, devrik agac, ot
-  for (let i = 0; i < 130; i++) {
-    const t = taken[Math.floor(rng.next() * taken.length)];
-    if (!t) break;
-    const x = t.x + rng.range(-30, 30);
-    const y = t.y + rng.range(-30, 30);
-    const kind = rng.next();
-    if (kind < 0.25) list.push(place(props, rng.pick(["stump", "stump-2"]), x, y, rng.range(8, 13), rng));
-    else if (kind < 0.4) list.push(place(props, "log", x, y, rng.range(7, 11), rng));
-    else list.push(place(props, rng.pick(GRASS), x, y, rng.range(6, 11), rng));
+  // Nehir kiyisina su bitkileri
+  for (let i = 0; i < 26; i++) {
+    const t = rng.range(120, MAP_SIZE - 120);
+    const side = rng.chance(0.5) ? 1 : -1;
+    const off = side * rng.range(26, 40);
+    const x = t + off * Math.SQRT1_2;
+    const y = t - off * Math.SQRT1_2;
+    if (x < 40 || y < 40 || x > MAP_SIZE - 40 || y > MAP_SIZE - 40) continue;
+    list.push(place(props, rng.pick(WATERPLANTS), x, y, 12, rng.range(0, Math.PI * 2)));
   }
 
   return instancePlacements(props, list);
 }
 
-/** Orman kamplarinin cevresini isaretler. */
+/** Orman kamplari: cevresini belirleyen kaya halkasi. */
 function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
   const g = new THREE.Group();
   const list: Placement[] = [];
 
   for (const camp of CAMPS) {
-    const r = camp.epic ? 48 : 32;
-    const count = camp.epic ? 9 : 6;
+    const r = camp.epic ? 46 : 30;
+    const count = camp.epic ? 8 : 5;
     for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + rng.range(-0.2, 0.2);
-      const x = camp.pos.x + Math.cos(a) * r;
-      const y = camp.pos.y + Math.sin(a) * r;
-      if (camp.epic) {
-        list.push(place(props, rng.pick(RED_ROCK.concat(GREY_ROCK)), x, y, rng.range(22, 34), rng, 0.1));
-      } else {
-        list.push(place(props, rng.pick(GREY_ROCK), x, y, rng.range(11, 17), rng, 0.1));
-      }
+      const a = (i / count) * Math.PI * 2;
+      list.push(place(
+        props, ROCKS[i % ROCKS.length],
+        camp.pos.x + Math.cos(a) * r,
+        camp.pos.y + Math.sin(a) * r,
+        camp.epic ? 22 : 13,
+        rng.range(0, Math.PI * 2),
+      ));
     }
 
     // Kamp zemini
@@ -585,57 +558,38 @@ function buildCamps(props: PropLibrary, rng: Rng): THREE.Group {
   return g;
 }
 
-/** Uslerin cevresine ev, fener, kuyu ve cit yerlestirir. */
+/** Us cevresi: takim renginde hazir koy binalari. */
 function buildBases(props: PropLibrary, rng: Rng): THREE.Group {
   const list: Placement[] = [];
   for (const team of [0, 1] as const) {
+    const suffix = team === 0 ? "blue" : "red";
     const n = NEXUS_POS[team];
-    // Us disa dogru baktigi icin dekor yarim daireye yayilir
     const face = team === 0 ? -Math.PI * 0.25 : Math.PI * 0.75;
 
-    // Evler
-    for (let i = 0; i < 3; i++) {
-      const a = face + Math.PI + (i - 1) * 0.72;
-      const x = clamp(n.x + Math.cos(a) * 96, 62, MAP_SIZE - 62);
-      const y = clamp(n.y + Math.sin(a) * 96, 62, MAP_SIZE - 62);
-      const pl = place(props, "cottage", x, y, 52, rng);
-      pl.rot = a + Math.PI;
-      list.push(pl);
+    const ring: [string, number, number][] = [
+      [`house-a-${suffix}`, 2.55, 132],
+      [`house-b-${suffix}`, 1.95, 142],
+      [`church-${suffix}`, 3.15, 128],
+      [`market-${suffix}`, 1.35, 138],
+      [`well-${suffix}`, 2.35, 96],
+      [`house-a-${suffix}`, 3.75, 130],
+    ];
+    for (const [model, angleOff, dist] of ring) {
+      const a = face + angleOff;
+      const x = clamp(n.x + Math.cos(a) * dist, 58, MAP_SIZE - 58);
+      const y = clamp(n.y + Math.sin(a) * dist, 58, MAP_SIZE - 58);
+      list.push(place(props, model, x, y, model.startsWith("well") ? 22 : 40, a + Math.PI));
     }
-    // Kuyu
-    list.push(place(props, "well", n.x + Math.cos(face + 2.4) * 62, n.y + Math.sin(face + 2.4) * 62, 30, rng));
-    // Fenerler: cikis yolunun iki yani
-    for (let i = 0; i < 5; i++) {
-      const d = 58 + i * 26;
+
+    // Cikis yolunun iki yaninda kayalik
+    for (let i = 0; i < 4; i++) {
+      const d = 78 + i * 30;
       for (const side of [-1, 1]) {
-        const a = face + side * (0.42 - i * 0.045);
-        const x = clamp(n.x + Math.cos(a) * d, 46, MAP_SIZE - 46);
-        const y = clamp(n.y + Math.sin(a) * d, 46, MAP_SIZE - 46);
-        list.push(place(props, "lightpost", x, y, 26, rng));
+        const a = face + side * 0.55;
+        const x = clamp(n.x + Math.cos(a) * d, 48, MAP_SIZE - 48);
+        const y = clamp(n.y + Math.sin(a) * d, 48, MAP_SIZE - 48);
+        list.push(place(props, rng.pick(ROCKS), x, y, 14, rng.range(0, Math.PI * 2)));
       }
-    }
-    // Us cevresini saran tas duvar (harita disina tasmaz)
-    for (let i = 0; i < 14; i++) {
-      const a = face + Math.PI * 0.45 + (i / 13) * Math.PI * 1.1;
-      const d = 104;
-      const x = n.x + Math.cos(a) * d;
-      const y = n.y + Math.sin(a) * d;
-      if (x < 52 || x > MAP_SIZE - 52 || y < 52 || y > MAP_SIZE - 52) continue;
-      const pl = place(props, i === 7 ? "wall-arch" : "wall", x, y, 24, rng);
-      pl.rot = a + Math.PI / 2;
-      pl.tiltX = 0;
-      pl.tiltZ = 0;
-      list.push(pl);
-    }
-    // Cit parcalari
-    for (let i = 0; i < 8; i++) {
-      const a = face + Math.PI + rng.range(-1.1, 1.1);
-      const d = rng.range(70, 100);
-      const x = clamp(n.x + Math.cos(a) * d, 52, MAP_SIZE - 52);
-      const y = clamp(n.y + Math.sin(a) * d, 52, MAP_SIZE - 52);
-      const pl = place(props, rng.pick(["fence", "fence-2"]), x, y, 16, rng);
-      pl.rot = a + Math.PI / 2;
-      list.push(pl);
     }
   }
   return instancePlacements(props, list);

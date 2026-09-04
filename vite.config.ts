@@ -12,10 +12,9 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: false,
     rollupOptions: {
-      // Oyun + gelistirici galerileri
+      // Oyun + gelistirici varlik galerisi
       input: {
         main: "index.html",
-        models: "models.html",
         props: "props.html",
       },
     },

@@ -13,8 +13,9 @@ import { TEAM_COLORS, TEAM_COLORS_DARK } from "../game/constants";
 import type { Champion } from "../game/champion";
 import type { Minion, Monster, Structure } from "../game/units";
 import { championModel, creatureModel, type CharModel } from "../render/models";
-import { instantiate, findBone, tintAll, tintByMaterialName, type LoadedModel } from "./assets";
-import { buildCape, buildHeadgear, buildOffhand, buildTeamRing, buildWeapon, colorOf } from "./gear";
+import { findBone, findNode, instantiate, mergeSkinned, tintAll, type LoadedModel } from "./assets";
+import { buildTeamRing, colorOf } from "./gear";
+import { GEAR_NODES, MINION_MODELS, MINION_WEAPONS, type Clip, type Loadout } from "./loadout";
 import type { PropLibrary } from "./props";
 import { terrainHeight } from "./terrain";
 
@@ -29,7 +30,24 @@ export function facingToYaw(facing: number): number {
 // Sampiyon
 // ---------------------------------------------------------------------------
 
-type AnimName = "Idle" | "Walking" | "Running" | "Punch" | "Death" | "Wave" | "Jump";
+type AnimName = "Idle" | "Walk" | "Run" | "Attack" | "Cast" | "Death" | "Hit";
+
+/** Oyun ici durum adi -> KayKit klip adi. */
+const BASE_CLIPS: Record<AnimName, Clip> = {
+  Idle: "Idle",
+  Walk: "Walking_A",
+  Run: "Running_A",
+  Attack: "1H_Melee_Attack_Chop",
+  Cast: "Spellcast_Shoot",
+  Death: "Death_A",
+  Hit: "Hit_A",
+};
+
+/**
+ * KayKit karakterlerinin ayakta boyu; model kutusu havaya kalkik silahi da
+ * kapsadigi icin olceklemede sabit bu referans kullanilir.
+ */
+export const KAYKIT_HEIGHT = 1.75;
 
 export class ChampionActor {
   readonly root = new THREE.Group();
@@ -39,9 +57,8 @@ export class ChampionActor {
   private current: AnimName = "Idle";
   private ring: THREE.Mesh;
   private cape: THREE.Object3D | null = null;
-  private glowOrbs: THREE.Mesh[] = [];
-  private aura: THREE.Mesh | null = null;
   private shieldDome: THREE.Mesh;
+  private aura: THREE.Mesh | null = null;
   private flashMats: THREE.MeshStandardMaterial[] = [];
   private baseColors: number[] = [];
   private swingCooldown = 0;
@@ -51,26 +68,43 @@ export class ChampionActor {
   constructor(
     readonly champ: Champion,
     model: LoadedModel,
+    loadout: Loadout,
     isPlayer: boolean,
   ) {
     const def: CharModel = championModel(champ.def.id);
-    const buildScale = def.build === "heavy" ? 1.1 : def.build === "slim" ? 0.92 : 1;
-    const target = champ.radius * 2.9 * buildScale;
-    const k = target / model.height;
-    // Ekipmanlar 1.8 birim boyunda bir figur icin cizildi; modelin gercek
-    // olceginden bagimsiz olarak dogru orana getirilir.
-    const gearScale = target / 1.8;
+    const buildScale = def.build === "heavy" ? 1.08 : def.build === "slim" ? 0.94 : 1;
+    const target = champ.radius * 3.4 * buildScale;
     this.bodyHeight = target;
 
     this.body = instantiate(model);
-    this.body.scale.setScalar(k);
+    this.body.scale.setScalar(target / KAYKIT_HEIGHT);
     this.root.add(this.body);
 
-    tintByMaterialName(this.body, {
-      Main: colorOf(def.body),
-      Grey: colorOf(def.accent),
-      Black: colorOf(def.bodyDark),
-    });
+    // --- Hazir ekipman parcalarindan sadece bu sampiyonunkiler acilir ---
+    const all = GEAR_NODES[loadout.model] ?? [];
+    const show = new Set(loadout.show);
+    for (const name of all) {
+      const node = findNode(this.body, name);
+      if (node) node.visible = show.has(name);
+    }
+    this.cape = findNode(this.body, `${loadout.model.replace("champ-", "")}_Cape`);
+
+    // Govde parcalari tek mesh'te birlestirilir (10 cizim cagrisi -> 1)
+    mergeSkinned(this.body);
+
+    // --- Sampiyon rengi: govdeye ve pelerine hafif tint ---
+    if (loadout.tint !== undefined) {
+      const tint = new THREE.Color(loadout.tint);
+      this.body.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !/merged|Cape|Cloak/i.test(m.name)) return;
+        const list = Array.isArray(m.material) ? m.material : [m.material];
+        for (const mm of list) {
+          const std = mm as THREE.MeshStandardMaterial;
+          if (std.color) std.color.lerp(tint, 0.28);
+        }
+      });
+    }
 
     // Hasar parlamasi icin materyalleri topla
     this.body.traverse((o) => {
@@ -84,23 +118,6 @@ export class ChampionActor {
           this.baseColors.push(std.emissive.getHex());
         }
       }
-    });
-
-    // --- Ekipman ---
-    this.attach(findBone(this.body, "Palm2R"), buildWeapon(def), gearScale, new THREE.Euler(-0.32, 0, 0));
-    const off = buildOffhand(def);
-    if (off) this.attach(findBone(this.body, "Palm2L"), off, gearScale, new THREE.Euler(-0.25, 0, 0));
-    const head = buildHeadgear(def);
-    if (head) this.attach(findBone(this.body, "Head"), head, gearScale, new THREE.Euler(0, 0, 0));
-    const cape = buildCape(def);
-    if (cape) {
-      this.cape = cape;
-      this.attach(findBone(this.body, "Torso_1") ?? findBone(this.body, "Body") ?? this.body, cape, gearScale, new THREE.Euler(0, 0, 0));
-    }
-
-    this.body.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh && m.name === "glowOrb") this.glowOrbs.push(m);
     });
 
     // --- Takim halkasi ---
@@ -145,39 +162,23 @@ export class ChampionActor {
     }
 
     // --- Animasyonlar ---
+    const clips: Record<AnimName, Clip> = {
+      ...BASE_CLIPS,
+      Attack: loadout.attack,
+      Cast: loadout.cast,
+    };
     this.mixer = new THREE.AnimationMixer(this.body);
-    for (const clip of model.animations) {
-      const name = clip.name as AnimName;
+    for (const [state, clipName] of Object.entries(clips) as [AnimName, Clip][]) {
+      const clip = model.animations.find((c) => c.name === clipName);
+      if (!clip) continue;
       const action = this.mixer.clipAction(clip);
-      if (name === "Death" || name === "Punch" || name === "Jump") {
+      if (state === "Death" || state === "Attack" || state === "Cast" || state === "Hit") {
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = true;
       }
-      this.actions.set(name, action);
+      this.actions.set(state, action);
     }
     this.play("Idle", 0);
-  }
-
-  /** Kemige, kemik olceginden bagimsiz boyutta ekipman takar. */
-  private attach(
-    bone: THREE.Object3D | null,
-    gear: THREE.Object3D,
-    worldScale: number,
-    rot: THREE.Euler,
-  ): void {
-    if (!bone) {
-      this.body.add(gear);
-      return;
-    }
-    const holder = new THREE.Object3D();
-    const ws = new THREE.Vector3();
-    bone.updateWorldMatrix(true, false);
-    bone.getWorldScale(ws);
-    const s = ws.x > 1e-6 ? worldScale / ws.x : 1;
-    holder.scale.setScalar(s);
-    holder.rotation.copy(rot);
-    holder.add(gear);
-    bone.add(holder);
   }
 
   private play(name: AnimName, fade = 0.18): void {
@@ -200,7 +201,7 @@ export class ChampionActor {
     const prev = this.actions.get(this.current);
     if (prev && prev !== a) prev.fadeOut(0.1);
     a.reset();
-    a.setEffectiveTimeScale(1.6);
+    a.setEffectiveTimeScale(1.5);
     a.enabled = true;
     a.setEffectiveWeight(1);
     a.fadeIn(0.06);
@@ -224,21 +225,17 @@ export class ChampionActor {
       this.ring.visible = true;
       if (this.current === "Death") this.play("Idle", 0.1);
       if (c.swing > 0.2 && this.swingCooldown <= 0) {
-        this.trigger("Punch");
-        this.swingCooldown = 0.34;
+        this.trigger("Attack");
+        this.swingCooldown = 0.36;
       } else if (c.castAnim > 0.24 && this.swingCooldown <= 0) {
-        this.trigger("Wave");
-        this.swingCooldown = 0.32;
-      } else if (
-        this.current !== "Punch" &&
-        this.current !== "Wave" &&
-        this.current !== "Jump"
-      ) {
-        if (c.speedNow > 55) this.play("Running");
-        else if (c.speedNow > 8) this.play("Walking");
+        this.trigger("Cast");
+        this.swingCooldown = 0.34;
+      } else if (this.current !== "Attack" && this.current !== "Cast") {
+        if (c.speedNow > 55) this.play("Run");
+        else if (c.speedNow > 8) this.play("Walk");
         else this.play("Idle");
       } else if (this.swingCooldown <= 0) {
-        this.play(c.speedNow > 8 ? "Walking" : "Idle", 0.12);
+        this.play(c.speedNow > 8 ? "Walk" : "Idle", 0.12);
       }
     }
 
@@ -259,25 +256,16 @@ export class ChampionActor {
 
     const sh = c.shieldAmount;
     this.shieldDome.visible = sh > 0;
-    if (sh > 0) {
-      const s = 1 + 0.04 * Math.sin(time * 6);
-      this.shieldDome.scale.setScalar(s);
-    }
+    if (sh > 0) this.shieldDome.scale.setScalar(1 + 0.04 * Math.sin(time * 6));
 
     if (this.aura) {
       this.aura.rotation.y = time * 0.6;
       (this.aura.material as THREE.MeshBasicMaterial).opacity = 0.22 + 0.1 * Math.sin(time * 3);
     }
 
-    for (const orb of this.glowOrbs) {
-      const s = 1 + 0.16 * Math.sin(time * 5 + this.champ.id);
-      orb.scale.setScalar(s);
-    }
-
     if (this.cape) {
-      const sway = Math.sin(time * 6 + this.champ.id) * (c.speedNow > 8 ? 0.22 : 0.05);
+      const sway = Math.sin(time * 6 + this.champ.id) * (c.speedNow > 8 ? 0.18 : 0.04);
       this.cape.rotation.x = sway * 0.5;
-      this.cape.rotation.z = sway;
     }
 
     // Hasar parlamasi
@@ -298,131 +286,135 @@ export class ChampionActor {
 }
 
 // ---------------------------------------------------------------------------
-// Minyonlar (instanced)
+// Minyonlar
 // ---------------------------------------------------------------------------
 
-function minionGeometry(kind: Minion["minionKind"]): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  const big = kind === "cannon" || kind === "super";
-  const s = big ? 1.25 : 1;
+/**
+ * Minyonlar hazir iskelet karakterleriyle cizilir. Her minyon icin bir
+ * aktor havuzda tutulur; olen minyonun aktoru geri verilir.
+ */
+class MinionActor {
+  readonly root = new THREE.Group();
+  private mixer: THREE.AnimationMixer;
+  private actions = new Map<string, THREE.AnimationAction>();
+  private current = "";
+  private body: THREE.Group;
+  private mats: THREE.MeshStandardMaterial[] = [];
+  private baseColors: THREE.Color[] = [];
 
-  const body = new THREE.BoxGeometry(7 * s, 9 * s, 5.4 * s);
-  body.translate(0, 8 * s, 0);
-  parts.push(body);
+  constructor(model: LoadedModel, weapon: THREE.Object3D | null, height: number) {
+    this.body = instantiate(model);
+    this.body.scale.setScalar(height / KAYKIT_HEIGHT);
+    this.root.add(this.body);
 
-  const head = new THREE.BoxGeometry(4.6 * s, 4 * s, 4.4 * s);
-  head.translate(0, 14.6 * s, 0.4);
-  parts.push(head);
+    mergeSkinned(this.body);
 
-  // Bacaklar
-  for (const off of [-2, 2]) {
-    const leg = new THREE.BoxGeometry(2.4 * s, 5 * s, 2.4 * s);
-    leg.translate(off * s, 2.6 * s, 0);
-    parts.push(leg);
+    if (weapon) {
+      const bone = findBone(this.body, "handslot.r");
+      (bone ?? this.body).add(weapon);
+    }
+
+    this.body.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !m.material) return;
+      const list = Array.isArray(m.material) ? m.material : [m.material];
+      for (const mm of list) {
+        const std = mm as THREE.MeshStandardMaterial;
+        if (std.color) {
+          this.mats.push(std);
+          this.baseColors.push(std.color.clone());
+        }
+      }
+    });
+
+    this.mixer = new THREE.AnimationMixer(this.body);
+    for (const clip of model.animations) this.actions.set(clip.name, this.mixer.clipAction(clip));
+    this.play("Idle", 0);
   }
 
-  // Kollar
-  for (const off of [-4.4, 4.4]) {
-    const arm = new THREE.BoxGeometry(1.9 * s, 6.4 * s, 1.9 * s);
-    arm.translate(off * s, 8.4 * s, 0);
-    parts.push(arm);
+  /** Takim rengini kumas parcalarina karistirir. */
+  tint(color: THREE.Color): void {
+    for (let i = 0; i < this.mats.length; i++) {
+      this.mats[i].color.copy(this.baseColors[i]).lerp(color, 0.4);
+    }
   }
 
-  if (kind === "caster") {
-    const staff = new THREE.CylinderGeometry(0.5, 0.6, 12, 5);
-    staff.translate(5 * s, 10 * s, 1.5);
-    parts.push(staff);
-    const orb = new THREE.IcosahedronGeometry(1.9, 0);
-    orb.translate(5 * s, 16.4 * s, 1.5);
-    parts.push(orb);
-  } else if (kind === "cannon") {
-    const barrel = new THREE.CylinderGeometry(2.1, 2.4, 10, 6);
-    barrel.rotateX(Math.PI / 2);
-    barrel.translate(5 * s, 9 * s, 4);
-    parts.push(barrel);
-  } else {
-    const blade = new THREE.BoxGeometry(1.1, 10 * s, 0.7);
-    blade.translate(5 * s, 11 * s, 1.6);
-    parts.push(blade);
-    const shield = new THREE.BoxGeometry(0.9, 6.5 * s, 5 * s);
-    shield.translate(-5.4 * s, 9 * s, 0.6);
-    parts.push(shield);
+  private play(name: string, fade = 0.15): void {
+    const next = this.actions.get(name);
+    if (!next || this.current === name) return;
+    const prev = this.actions.get(this.current);
+    next.reset().play();
+    if (prev && fade > 0) prev.crossFadeTo(next, fade, false);
+    else if (prev) prev.stop();
+    this.current = name;
   }
 
-  if (kind === "super") {
-    const crest = new THREE.ConeGeometry(1.5, 4.5, 4);
-    crest.translate(0, 18.4 * s, 0);
-    parts.push(crest);
+  update(mi: Minion, dt: number): void {
+    this.root.position.set(mi.pos.x, terrainHeight(mi.pos.x, mi.pos.y), mi.pos.y);
+    this.root.rotation.y = facingToYaw(mi.facing);
+    if (!mi.alive) this.play("Death_A", 0.1);
+    else if (mi.swing > 0.15) this.play("1H_Melee_Attack_Chop", 0.06);
+    else if (mi.speedNow > 6) this.play("Walking_A");
+    else this.play("Idle");
+    this.mixer.update(dt);
   }
-
-  // Bazi geometriler indeksli, bazilari degil; birlestirmeden once esitle
-  const flat = parts.map((g) => (g.index ? g.toNonIndexed() : g));
-  return mergeGeometries(flat, false) ?? body;
 }
 
 export class MinionField {
   readonly group = new THREE.Group();
-  private meshes = new Map<string, THREE.InstancedMesh>();
-  private m4 = new THREE.Matrix4();
-  private q = new THREE.Quaternion();
-  private v = new THREE.Vector3();
-  private sc = new THREE.Vector3(1, 1, 1);
+  private models = new Map<string, LoadedModel>();
+  private weapons = new Map<string, THREE.Object3D>();
+  private actors = new Map<number, MinionActor>();
+  private teamColors = [new THREE.Color(), new THREE.Color()];
 
-  constructor(capacity = 70) {
-    const kinds: Minion["minionKind"][] = ["melee", "caster", "cannon", "super"];
+  /** Minyon modellerini ve hazir silahlarini baglar. */
+  build(models: Map<string, LoadedModel>, weapons: Map<string, THREE.Object3D>): void {
+    this.models = models;
+    this.weapons = weapons;
     for (const team of [0, 1] as const) {
-      for (const kind of kinds) {
-        const geo = minionGeometry(kind);
-        const mat = new THREE.MeshStandardMaterial({
-          color: colorOf(TEAM_COLORS_DARK[team]),
-          emissive: colorOf(TEAM_COLORS[team]),
-          emissiveIntensity: 0.22,
-          roughness: 0.7,
-          metalness: 0.1,
-          flatShading: true,
-        });
-        const im = new THREE.InstancedMesh(geo, mat, capacity);
-        im.castShadow = true;
-        im.receiveShadow = false;
-        im.frustumCulled = false;
-        im.count = 0;
-        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        this.meshes.set(`${team}:${kind}`, im);
-        this.group.add(im);
-      }
+      this.teamColors[team] = new THREE.Color(colorOf(TEAM_COLORS[team]));
     }
   }
 
-  update(minions: Minion[], playerTeam: number, time: number): void {
-    const counts = new Map<string, number>();
-    for (const m of this.meshes.values()) m.count = 0;
+  update(minions: Minion[], playerTeam: number, dt: number): void {
+    const seen = new Set<number>();
 
     for (const mi of minions) {
-      if (!mi.alive) continue;
+      const visible = mi.alive || mi.deathTimer < 1.4;
+      if (!visible) continue;
       if (mi.team !== playerTeam && !mi.visibleTo[playerTeam as 0 | 1]) continue;
-      const key = `${mi.team}:${mi.minionKind}`;
-      const im = this.meshes.get(key);
-      if (!im) continue;
-      const i = counts.get(key) ?? 0;
-      if (i >= im.instanceMatrix.count) continue;
+      seen.add(mi.id);
 
-      const bob = mi.speedNow > 6 ? Math.abs(Math.sin(mi.walkPhase * 2.6)) * 1.4 : 0;
-      const lean = mi.speedNow > 6 ? Math.sin(mi.walkPhase * 2.6) * 0.12 : 0;
-      this.v.set(mi.pos.x, terrainHeight(mi.pos.x, mi.pos.y) + bob, mi.pos.y);
-      this.q.setFromEuler(new THREE.Euler(lean, facingToYaw(mi.facing), 0, "YXZ"));
-      const k = mi.minionKind === "super" ? 1.15 : 0.95;
-      this.sc.set(k, k, k);
-      this.m4.compose(this.v, this.q, this.sc);
-      im.setMatrixAt(i, this.m4);
-      counts.set(key, i + 1);
+      let a = this.actors.get(mi.id);
+      if (!a) {
+        const modelName = MINION_MODELS[mi.minionKind] ?? "minion-melee";
+        const model = this.models.get(modelName);
+        if (!model) continue;
+        const weaponSrc = this.weapons.get(MINION_WEAPONS[mi.minionKind] ?? "sword-1handed");
+        const height = MINION_HEIGHT[mi.minionKind];
+        a = new MinionActor(model, weaponSrc ? weaponSrc.clone() : null, height);
+        a.tint(this.teamColors[mi.team]);
+        this.actors.set(mi.id, a);
+        this.group.add(a.root);
+      }
+      a.update(mi, dt);
     }
 
-    for (const [key, im] of this.meshes) {
-      im.count = counts.get(key) ?? 0;
-      im.instanceMatrix.needsUpdate = true;
+    for (const [id, a] of this.actors) {
+      if (seen.has(id)) continue;
+      this.group.remove(a.root);
+      this.actors.delete(id);
     }
   }
 }
+
+/** Minyon turune gore oyun birimi cinsinden boy. */
+const MINION_HEIGHT: Record<Minion["minionKind"], number> = {
+  melee: 17,
+  caster: 16,
+  cannon: 20,
+  super: 24,
+};
 
 // ---------------------------------------------------------------------------
 // Orman canavarlari
@@ -441,9 +433,9 @@ export class MonsterActor {
   ) {
     const cm = creatureModel(monster.spec.name);
     this.body = instantiate(model);
-    const target = monster.radius * (monster.spec.epic ? 3.4 : 2.4);
-    this.body.scale.setScalar(target / model.height);
-    tintAll(this.body, colorOf(cm.body), monster.spec.epic ? colorOf(cm.accent) : 0x000000);
+    const target = monster.radius * (monster.spec.epic ? 3.4 : 2.3);
+    this.body.scale.setScalar(target / KAYKIT_HEIGHT);
+    tintAll(this.body, colorOf(cm.body), monster.spec.epic ? colorOf(cm.accent) : 0x000000, 0.35);
     if (monster.spec.epic) {
       this.body.traverse((o) => {
         const m = o as THREE.Mesh;
@@ -454,27 +446,14 @@ export class MonsterActor {
         }
       });
     }
+    mergeSkinned(this.body);
     this.root.add(this.body);
-
-    // Epik canavarlara boynuz / diken
-    if (cm.horns) {
-      for (const s of [-1, 1]) {
-        const horn = new THREE.Mesh(
-          new THREE.ConeGeometry(monster.radius * 0.16, monster.radius * 0.75, 5),
-          new THREE.MeshStandardMaterial({ color: 0xe8dcc6, flatShading: true, roughness: 0.6 }),
-        );
-        horn.position.set(s * monster.radius * 0.28, monster.radius * 1.25, monster.radius * 0.85);
-        horn.rotation.z = s * -0.5;
-        horn.castShadow = true;
-        this.root.add(horn);
-      }
-    }
 
     this.mixer = new THREE.AnimationMixer(this.body);
     for (const clip of model.animations) {
       this.actions.set(clip.name, this.mixer.clipAction(clip));
     }
-    this.play("Survey");
+    this.play("Idle");
   }
 
   private play(name: string, fade = 0.2): void {
@@ -492,9 +471,10 @@ export class MonsterActor {
     if (!m.alive) return;
     this.root.position.set(m.pos.x, terrainHeight(m.pos.x, m.pos.y), m.pos.y);
     this.root.rotation.y = facingToYaw(m.facing);
-    if (m.speedNow > 45) this.play("Run");
-    else if (m.speedNow > 6) this.play("Walk");
-    else this.play("Survey");
+    if (m.swing > 0.2) this.play("1H_Melee_Attack_Chop", 0.08);
+    else if (m.speedNow > 45) this.play("Running_A");
+    else if (m.speedNow > 6) this.play("Walking_A");
+    else this.play("Idle");
     this.mixer.update(dt);
   }
 }
@@ -503,28 +483,31 @@ export class MonsterActor {
 // Yapilar
 // ---------------------------------------------------------------------------
 
-/** Yapilarda kullanilan hazir modeller. */
-export const STRUCTURE_PROPS = ["tower", "tower-2", "inhibitor", "nexus", "rock-3", "rock-4"];
+/** Yapilarda kullanilan hazir modeller (her takim icin ayri renk). */
+export const STRUCTURE_PROPS = [
+  "tower-a-blue", "tower-b-blue", "tower-c-blue", "inhibitor-blue", "nexus-blue",
+  "tower-a-red", "tower-b-red", "tower-c-red", "inhibitor-red", "nexus-red",
+  "rock-single-c", "rock-single-d",
+];
+
+/** Us cevresine konan hazir yapilar. */
+export const BASE_PROPS = [
+  "house-a-blue", "house-b-blue", "church-blue", "market-blue", "well-blue",
+  "house-a-red", "house-b-red", "church-red", "market-red", "well-red",
+];
 
 export class StructureActor {
   readonly root = new THREE.Group();
-  private body: THREE.Object3D | null = null;
   private crystal: THREE.Object3D | null = null;
   private glow: THREE.Mesh | null = null;
+  private body: THREE.Object3D | null = null;
   private rubble: THREE.Object3D | null = null;
   private alivePart = new THREE.Group();
-  private baseY = 0;
+  private restY = 0;
 
   constructor(readonly s: Structure, props: PropLibrary) {
+    const team = s.team === 0 ? "blue" : "red";
     const col = colorOf(TEAM_COLORS[s.team]);
-    const dark = colorOf(TEAM_COLORS_DARK[s.team]);
-    const glowMat = new THREE.MeshStandardMaterial({
-      color: col,
-      emissive: col,
-      emissiveIntensity: 1.6,
-      roughness: 0.3,
-    });
-
     this.root.add(this.alivePart);
     const r = s.radius;
 
@@ -532,29 +515,33 @@ export class StructureActor {
     let name: string;
     let height: number;
     if (s.kind === "tower") {
-      name = s.tier >= 3 ? "tower-2" : "tower";
-      height = r * (4.4 + s.tier * 0.4);
+      name = s.tier >= 3 ? `tower-c-${team}` : s.tier === 2 ? `tower-b-${team}` : `tower-a-${team}`;
+      height = r * (3.7 + s.tier * 0.3);
     } else if (s.kind === "inhibitor") {
-      name = "inhibitor";
-      height = r * 3.1;
+      name = `inhibitor-${team}`;
+      height = r * 2.15;
     } else {
-      name = "nexus";
-      height = r * 3.4;
+      name = `nexus-${team}`;
+      height = r * 2.6;
     }
     const body = props.clone(name, height);
-    body.rotation.y = s.kind === "tower" ? 0 : (s.team === 0 ? Math.PI * 0.25 : Math.PI * 1.25);
-    tintTowardTeam(body, dark);
+    body.rotation.y = s.team === 0 ? Math.PI * 0.25 : Math.PI * 1.25;
     this.body = body;
     this.alivePart.add(body);
-    this.baseY = height;
+    this.restY = height + r * (s.kind === "tower" ? 0.35 : 0.6);
 
-    // --- Takim kristali (hedef ve takim gostergesi) ---
+    // --- Takim kristali: hedef ve takim gostergesi ---
     const crystal = new THREE.Mesh(
-      new THREE.OctahedronGeometry(r * (s.kind === "tower" ? 0.3 : 0.6), 0),
-      glowMat,
+      new THREE.OctahedronGeometry(r * (s.kind === "tower" ? 0.3 : 0.55), 0),
+      new THREE.MeshStandardMaterial({
+        color: col,
+        emissive: col,
+        emissiveIntensity: 1.6,
+        roughness: 0.3,
+      }),
     );
     crystal.scale.set(1, 1.4, 1);
-    crystal.position.y = height + r * (s.kind === "tower" ? 0.5 : 0.75);
+    crystal.position.y = this.restY;
     this.crystal = crystal;
     this.glow = crystal;
     this.alivePart.add(crystal);
@@ -567,14 +554,13 @@ export class StructureActor {
       }
     });
 
-    // --- Yikilmis hali: hazir kaya modelleri ---
+    // --- Yikinti: hazir kaya modelleri ---
     const rubble = new THREE.Group();
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 + s.id;
-      const chunk = props.clone(i % 2 === 0 ? "rock-3" : "rock-4", r * (0.5 + (i % 3) * 0.2));
-      chunk.position.set(Math.cos(a) * r * 0.85, 0, Math.sin(a) * r * 0.85);
+      const chunk = props.clone(i % 2 === 0 ? "rock-single-c" : "rock-single-d", r * (0.4 + (i % 3) * 0.18));
+      chunk.position.set(Math.cos(a) * r * 0.8, 0, Math.sin(a) * r * 0.8);
       chunk.rotation.y = i * 1.3;
-      tintTowardTeam(chunk, 0x4a4f56);
       rubble.add(chunk);
     }
     rubble.visible = false;
@@ -592,33 +578,16 @@ export class StructureActor {
 
     if (this.body && s.kind === "tower") {
       // Saldiri sirasinda hafif geri tepme
-      const recoil = clamp(s.swing / 0.24, 0, 1);
-      this.body.position.y = -recoil * s.radius * 0.12;
+      this.body.position.y = -clamp(s.swing / 0.24, 0, 1) * s.radius * 0.1;
     }
     if (this.crystal) {
       this.crystal.rotation.y = time * 0.8;
-      const rest = this.baseY + s.radius * (s.kind === "tower" ? 0.5 : 0.75);
-      this.crystal.position.y += (rest + Math.sin(time * 1.4) * s.radius * 0.12 - this.crystal.position.y) * 0.2;
+      const want = this.restY + Math.sin(time * 1.4) * s.radius * 0.1;
+      this.crystal.position.y += (want - this.crystal.position.y) * 0.2;
     }
-
     if (this.glow) {
       const m = this.glow.material as THREE.MeshStandardMaterial;
-      const dim = s.invulnerable ? 0.5 : 1;
-      m.emissiveIntensity = (1.2 + 0.5 * Math.sin(time * 3 + s.id)) * dim;
+      m.emissiveIntensity = (1.2 + 0.5 * Math.sin(time * 3 + s.id)) * (s.invulnerable ? 0.5 : 1);
     }
   }
-}
-
-/** Hazir modelin tas rengini takim rengine dogru kaydirir. */
-function tintTowardTeam(root: THREE.Object3D, hex: number): void {
-  const tint = new THREE.Color(hex);
-  root.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh || !m.material) return;
-    const list = Array.isArray(m.material) ? m.material : [m.material];
-    for (const mat of list) {
-      const std = mat as THREE.MeshStandardMaterial;
-      if (std.color) std.color.lerp(tint, 0.42);
-    }
-  });
 }

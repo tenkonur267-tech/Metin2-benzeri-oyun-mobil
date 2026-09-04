@@ -6,7 +6,7 @@
  * InstancedMesh'e cevrilir.
  */
 import * as THREE from "three";
-import { loadModel, type LoadedModel } from "./assets";
+import { dequantize, loadModel, type LoadedModel } from "./assets";
 
 export interface PropPart {
   geometry: THREE.BufferGeometry;
@@ -91,29 +91,6 @@ export class PropLibrary {
       return im;
     });
   }
-}
-
-/**
- * Sikistirilmis modellerde konumlar Int16 olarak saklanir (KHR_mesh_quantization).
- * Donusum uygulamadan once tum ozellikleri Float32'ye cevirmek gerekir,
- * yoksa `applyMatrix4` tam sayi tamponuna yazip geometriyi bozar.
- */
-function dequantize(geo: THREE.BufferGeometry): THREE.BufferGeometry {
-  for (const key of Object.keys(geo.attributes)) {
-    const attr = geo.attributes[key] as THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
-    const plain = attr as THREE.BufferAttribute;
-    if (plain.isBufferAttribute && !attr.normalized && plain.array instanceof Float32Array) continue;
-    const n = attr.itemSize;
-    const out = new Float32Array(attr.count * n);
-    for (let i = 0; i < attr.count; i++) {
-      out[i * n] = attr.getX(i);
-      if (n > 1) out[i * n + 1] = attr.getY(i);
-      if (n > 2) out[i * n + 2] = attr.getZ(i);
-      if (n > 3) out[i * n + 3] = attr.getW(i);
-    }
-    geo.setAttribute(key, new THREE.BufferAttribute(out, n));
-  }
-  return geo;
 }
 
 /** Model hiyerarsisini duz (geometri, materyal) listesine cevirir. */

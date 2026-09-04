@@ -6,8 +6,8 @@
 import * as THREE from "three";
 import { CHAMPIONS } from "../game/champions";
 import { championModel } from "../render/models";
-import { instantiate, findBone, tintByMaterialName, type LoadedModel } from "./assets";
-import { buildCape, buildHeadgear, buildOffhand, buildWeapon, colorOf } from "./gear";
+import { findNode, instantiate, type LoadedModel } from "./assets";
+import { GEAR_NODES, loadoutOf } from "./loadout";
 
 const cache = new Map<string, HTMLCanvasElement>();
 const SIZE = 256;
@@ -24,7 +24,7 @@ export function championPortrait(id: string): HTMLCanvasElement {
 }
 
 /** Tum sampiyonlarin portresini bir kez uretir. */
-export function buildPortraits(model: LoadedModel): void {
+export function buildPortraits(models: Map<string, LoadedModel>): void {
   if (cache.size >= CHAMPIONS.length) return;
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -45,23 +45,32 @@ export function buildPortraits(model: LoadedModel): void {
 
   for (const def of CHAMPIONS) {
     const cm = championModel(def.id);
+    const lo = loadoutOf(def.id);
+    const model = models.get(lo.model);
+    if (!model) continue;
+
     const holder = new THREE.Group();
     const body = instantiate(model);
-    const k = 1 / model.height;
-    const gearScale = 1 / 1.8;
-    body.scale.setScalar(k);
-    tintByMaterialName(body, {
-      Main: colorOf(cm.body),
-      Grey: colorOf(cm.accent),
-      Black: colorOf(cm.bodyDark),
-    });
-    attach(findBone(body, "Palm2R"), buildWeapon(cm), gearScale);
-    const off = buildOffhand(cm);
-    if (off) attach(findBone(body, "Palm2L"), off, gearScale);
-    const head = buildHeadgear(cm);
-    if (head) attach(findBone(body, "Head"), head, gearScale);
-    const cape = buildCape(cm);
-    if (cape) attach(findBone(body, "Torso_1") ?? findBone(body, "Body") ?? body, cape, gearScale);
+    body.scale.setScalar(1 / 1.75);
+
+    // Sadece bu sampiyonun ekipmani gorunur
+    const show = new Set(lo.show);
+    for (const name of GEAR_NODES[lo.model] ?? []) {
+      const node = findNode(body, name);
+      if (node) node.visible = show.has(name);
+    }
+    if (lo.tint !== undefined) {
+      const tint = new THREE.Color(lo.tint);
+      body.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !/Cape|Cloak|Body|Hat|Helmet|Hood/i.test(m.name)) return;
+        const list = Array.isArray(m.material) ? m.material : [m.material];
+        for (const mm of list) {
+          const std = mm as THREE.MeshStandardMaterial;
+          if (std.color) std.color.lerp(tint, 0.42);
+        }
+      });
+    }
 
     holder.add(body);
     holder.rotation.y = -0.7;
@@ -94,13 +103,4 @@ export function buildPortraits(model: LoadedModel): void {
   renderer.dispose();
 }
 
-function attach(bone: THREE.Object3D | null, gear: THREE.Object3D, worldScale: number): void {
-  if (!bone) return;
-  const holder = new THREE.Object3D();
-  const ws = new THREE.Vector3();
-  bone.updateWorldMatrix(true, false);
-  bone.getWorldScale(ws);
-  holder.scale.setScalar(ws.x > 1e-6 ? worldScale / ws.x : 1);
-  holder.add(gear);
-  bone.add(holder);
-}
+
