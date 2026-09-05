@@ -8,6 +8,8 @@ import {
 import { sfx } from "../core/audio";
 import { CONFIG, MAP_SIZE, RADIUS } from "./constants";
 import { isBlockedCircle } from "./grid";
+import { autoHitPassives, critMultiplier, damagedPassives } from "./passives";
+import type { Champion } from "./champion";
 import type {
   DamageInfo,
   DamageType,
@@ -86,6 +88,10 @@ export abstract class Unit {
    */
   lastChampionHit = -1;
   lastChampionHitAgo = Infinity;
+  /** En son hasar aldigindan bu yana gecen sure (saniye). */
+  outOfCombat = Infinity;
+  /** En son saldiri yaptigindan bu yana gecen sure (calida gizlenmeyi bozar). */
+  outOfAttack = Infinity;
 
   /** Hareket. */
   moveTarget: Vec2 | null = null;
@@ -138,6 +144,8 @@ export abstract class Unit {
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.comboRest = Math.max(0, this.comboRest - dt);
     this.lastChampionHitAgo += dt;
+    this.outOfCombat += dt;
+    this.outOfAttack += dt;
     if (this.comboRest <= 0) this.comboStep = 0;
     this.deathTimer = this.alive ? 0 : this.deathTimer + dt;
   }
@@ -291,6 +299,10 @@ export abstract class Unit {
       (this as unknown as { lastDamageTime: number }).lastDamageTime = world.time;
     }
     if (info.sourceId >= 0) this.recentDamage.set(info.sourceId, world.time);
+    this.outOfCombat = 0;
+    if (this.kind === "champion" && applied > 0) {
+      damagedPassives(world, this as unknown as Champion, source ?? null, { ...info, amount: applied });
+    }
     if (source?.kind === "champion") {
       this.lastChampionHit = source.id;
       this.lastChampionHitAgo = 0;
@@ -437,6 +449,7 @@ export abstract class Unit {
     // Kombo: ard arda gelen vuruslar zinciri ilerletir
     this.comboStep = this.comboRest > 0 ? this.comboStep + 1 : 0;
     this.comboRest = this.attackInterval + 0.9;
+    this.outOfAttack = 0;
     this.attackCd = this.attackInterval;
     this.windup = Math.min(0.19, this.attackInterval * 0.26);
     this.windupTarget = t;
@@ -452,11 +465,12 @@ export abstract class Unit {
   /** Otomatik saldiri hasarini uygular (menzilliler mermi firlatir). */
   protected landAutoAttack(world: World, target: Unit): void {
     const crit = Math.random() < this.stats.crit;
+    const critMul = this.kind === "champion" ? critMultiplier(this as unknown as Champion) : 1.75;
     // Kombonun ucuncu vurusu bitiricidir: belirgin sekilde daha agir.
     // Yalniz sampiyonlarda; minyon ve canavarlarda kombo yok.
     const finisher =
       this.kind === "champion" && this.comboStep % COMBO_LENGTH === COMBO_LENGTH - 1;
-    const dmg = this.stats.ad * (crit ? 1.75 : 1) * (finisher ? COMBO_FINISHER_DMG : 1);
+    const dmg = this.stats.ad * (crit ? critMul : 1) * (finisher ? COMBO_FINISHER_DMG : 1);
     if (this.isRanged) {
       world.spawnAutoProjectile(this, target, dmg, crit);
     } else {
@@ -471,6 +485,9 @@ export abstract class Unit {
       });
       if (crit) world.fx.critMark(target.pos);
       this.onHit(world, target, dmg);
+      if (this.kind === "champion") {
+        autoHitPassives(world, this as unknown as Champion, target, dmg);
+      }
     }
   }
 
@@ -643,6 +660,12 @@ export class Structure extends Unit {
   /** Sonraki kule yikilmadan hasar alamaz. */
   protectedBy: Structure | null = null;
   respawnTimer = 0;
+  /**
+   * Kule korumasi: muttefik sampiyona saldiran dusmani kilitler.
+   * Kilit suresince minyonlara donmez.
+   */
+  aggroId = -1;
+  aggroTimer = 0;
 
   constructor(
     kind: "tower" | "inhibitor" | "nexus",
@@ -703,11 +726,14 @@ export class Structure extends Unit {
     }
     if (this.kind !== "tower") return;
 
-    if (!this.target || !this.target.alive || !this.inAttackRange(this.target)) {
-      const prev = this.target;
+    this.aggroTimer = Math.max(0, this.aggroTimer - dt);
+    // Kilitli hedef varsa her karede yeniden degerlendirilir; boylece
+    // kule saldirgani birakip minyona donmez.
+    const prev = this.target;
+    if (!this.target || !this.target.alive || !this.inAttackRange(this.target) || this.aggroTimer > 0) {
       this.target = world.findTowerTarget(this);
-      if (this.target !== prev) this.shotCount = 0;
     }
+    if (this.target !== prev) this.shotCount = 0;
     this.tryAutoAttack(world, dt);
   }
 

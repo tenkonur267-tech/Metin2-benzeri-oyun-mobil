@@ -3,6 +3,7 @@ import { clamp, dist, norm, type Vec2 } from "./core/math";
 import { castAbility, castSummoner, type AimInput } from "./game/abilities";
 import { World } from "./game/world";
 import type { Unit } from "./game/units";
+import type { Champion } from "./game/champion";
 import { computeLayout, inCircle, inRect, type HudLayout } from "./render/layout";
 import {
   aimTarget,
@@ -74,6 +75,8 @@ export class App {
   private lastCamTap = 0;
   private camDragged = 0;
   private forcedTarget: Unit | null = null;
+  /** Olunce izlenen takim arkadasi. */
+  private spectating: Champion | null = null;
 
   constructor(glCanvas: HTMLCanvasElement, hudCanvas: HTMLCanvasElement, overlay: HTMLElement) {
     this.glCanvas = glCanvas;
@@ -178,6 +181,7 @@ export class App {
       : 330;
     this.view.stage.rig.yaw = 0;
     this.forcedTarget = null;
+    this.spectating = null;
     this.attackHeld = false;
     this.world = new World({
       playerChampionId: this.championId,
@@ -199,6 +203,36 @@ export class App {
   }
 
   /** Ayarlar: kamera, otomatik hedef, ses ve mac islemleri. */
+  /**
+   * Kameranin takip ettigi nokta.
+   *
+   * Olunce en yakin yasayan takim arkadasi izlenir; kimse kalmadiysa
+   * kendi cesedinin oldugu yer. Yeniden dogunca kendine doner.
+   */
+  private cameraTarget(): Vec2 {
+    const world = this.world!;
+    const p = world.player;
+    if (p.alive) {
+      this.spectating = null;
+      return p.pos;
+    }
+    // Izlenen arkadas oldurulduyse yenisini sec
+    if (!this.spectating || !this.spectating.alive) {
+      let best: Champion | null = null;
+      let bd = Infinity;
+      for (const c of world.champions) {
+        if (c.team !== p.team || c === p || !c.alive) continue;
+        const d = dist(c.pos, p.pos);
+        if (d < bd) {
+          bd = d;
+          best = c;
+        }
+      }
+      this.spectating = best;
+    }
+    return this.spectating ? this.spectating.pos : p.pos;
+  }
+
   private openSettings(): void {
     const world = this.world;
     if (!world) return;
@@ -719,7 +753,7 @@ export class App {
       return;
     }
 
-    this.view.follow(this.world.player.pos, clamp(dt * 6, 0, 1));
+    this.view.follow(this.cameraTarget(), clamp(dt * 6, 0, 1));
     this.updateAim();
     this.view.update(this.world, this.phase === "playing" ? dt : 0.0001);
     this.view.render();

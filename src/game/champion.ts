@@ -1,4 +1,5 @@
 import { sfx } from "../core/audio";
+import { tickPassives } from "./passives";
 import { clamp, dist } from "../core/math";
 import { CONFIG, NEXUS_POS, RADIUS, SPAWN_POS, levelFromXp } from "./constants";
 import { getItem, MAX_ITEMS } from "./items";
@@ -57,6 +58,9 @@ export class Champion extends Unit {
   deaths = 0;
   assists = 0;
   killStreak = 0;
+  /** Kisa sure icinde ust uste yapilan kirim sayisi. */
+  multiKill = 0;
+  lastKillAt = -99;
 
   abilities: Record<string, AbilityState> = {};
   summoners: { spell: SummonerSpell; cd: number }[] = [];
@@ -289,6 +293,7 @@ export class Champion extends Unit {
   // -------------------------------------------------------------------------
 
   override update(world: World, dt: number): void {
+    if (this.alive) tickPassives(world, this, dt);
     for (const s of this.summoners) s.cd = Math.max(0, s.cd - dt);
     for (const k of ["Q", "W", "E", "R"] as const) {
       const st = this.abilities[k];

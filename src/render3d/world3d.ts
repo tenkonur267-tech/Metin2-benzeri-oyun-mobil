@@ -213,6 +213,8 @@ export class World3D {
     this.minions.update(world.minions, team, dt);
     if (this.terrain) {
       this.terrain.water.uniforms.uTime.value = this.time;
+      this.terrain.fow.uniforms.uTime.value = this.time;
+      this.terrain.fow.uniforms.uTime.value = this.time;
     }
     fowTime.value = this.time;
     // Vurus sarsintisini oyun katmanindan al

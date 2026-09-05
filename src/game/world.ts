@@ -57,6 +57,13 @@ export class World {
 
   player!: Champion;
   winner: Team | null = null;
+  /**
+   * Ekran ortasinda gosterilecek buyuk bildirimler (ilk kan, coklu
+   * kirim, seri...). HUD her karede suresi dolanlari atar.
+   */
+  announcements: { text: string; sub: string; color: string; life: number; maxLife: number }[] = [];
+  /** Ilk kan alindi mi. */
+  private firstBlood = false;
   events: CombatEvent[] = [];
 
   teams: [TeamState, TeamState] = [
@@ -281,6 +288,15 @@ export class World {
 
   findTowerTarget(t: Structure): Unit | null {
     const range = t.stats.attackRange + t.radius;
+
+    // Kule korumasi: muttefik sampiyona saldiran dusman kilitlenir ve
+    // menzilden cikana kadar birakilmaz.
+    if (t.aggroTimer > 0) {
+      const locked = this.getUnit(t.aggroId);
+      if (locked && locked.alive && dist(locked.pos, t.pos) <= range + locked.radius) return locked;
+      t.aggroTimer = 0;
+    }
+
     let minion: Unit | null = null;
     let minionD = Infinity;
     let champ: Unit | null = null;
@@ -306,6 +322,15 @@ export class World {
         if (tgt && tgt.kind === "champion" && tgt.team === t.team && this.time - (tgt.recentDamage.get(u.id) ?? -9) < 2.5) {
           aggressor = u;
         }
+      }
+    }
+    if (aggressor) {
+      const isNew = t.aggroId !== aggressor.id;
+      t.aggroId = aggressor.id;
+      t.aggroTimer = 4;
+      if (isNew && aggressor.kind === "champion" && (aggressor as Champion).isPlayer) {
+        this.log("Kule seni hedef aldi!", "#ff9b8f");
+        sfx.play("tower");
       }
     }
     return aggressor ?? minion ?? champ;
@@ -561,6 +586,12 @@ export class World {
     }
   }
 
+  /** Ekran ortasi bildirim ekler. */
+  announce(text: string, sub: string, color: string, life = 2.6): void {
+    this.announcements.push({ text, sub, color, life, maxLife: life });
+    if (this.announcements.length > 4) this.announcements.shift();
+  }
+
   private grantChampionKill(victim: Champion, killer: Unit | null, label?: string): void {
     const bounty = CONFIG.championKillGold + Math.min(300, victim.killStreak * CONFIG.shutdownBonus);
     let killerChamp: Champion | null = null;
@@ -580,6 +611,32 @@ export class World {
             ? " SERI!"
             : "";
       this.log(`${killerChamp.displayName()} → ${victim.displayName()}${streakMsg}`, killerChamp.team === 0 ? "#7fd0ff" : "#ff9b8f");
+
+      // --- Ekran ortasi bildirim ---
+      const mine = killerChamp.team === this.player.team;
+      const col = mine ? "#ffd24a" : "#ff7a6a";
+      // Kisa sure icinde ust uste kirimlar coklu sayilir
+      killerChamp.multiKill = this.time - killerChamp.lastKillAt < 10 ? killerChamp.multiKill + 1 : 1;
+      killerChamp.lastKillAt = this.time;
+      const multi = ["", "", "CIFTE KIRIM", "UCLU KIRIM", "DORTLU KIRIM", "PENTA KILL"][
+        Math.min(5, killerChamp.multiKill)
+      ];
+
+      if (!this.firstBlood) {
+        this.firstBlood = true;
+        this.announce("ILK KAN", killerChamp.displayName(), "#ff6a4a", 3);
+      } else if (multi) {
+        this.announce(multi, killerChamp.displayName(), col, 3);
+      } else if (killerChamp.killStreak >= 3) {
+        this.announce(streakMsg.trim(), killerChamp.displayName(), col, 2.4);
+      } else if (killerChamp.isPlayer || victim.isPlayer) {
+        this.announce(
+          killerChamp.isPlayer ? "KIRIM" : "OLDURULDUN",
+          killerChamp.isPlayer ? victim.displayName() : killerChamp.displayName(),
+          killerChamp.isPlayer ? "#ffd24a" : "#ff7a6a",
+          2,
+        );
+      }
     } else {
       const t: Team = victim.team === 0 ? 1 : 0;
       this.teams[t].kills++;
@@ -596,6 +653,7 @@ export class World {
       c.assists++;
       c.addGold(CONFIG.assistGold);
       c.gainXp(this, 110 + victim.level * 12);
+      if (c.isPlayer) this.announce("ASIST", victim.displayName(), "#8fd8ff", 1.8);
     }
     victim.recentDamage.clear();
   }
@@ -625,13 +683,22 @@ export class World {
         c.removeEffect("dragonAp");
         c.removeEffect("baronAd");
         c.removeEffect("baronAp");
+        c.removeEffect("dragonArmor");
+        c.removeEffect("dragonHaste");
+        c.removeEffect("baronHaste");
         if (st.dragons > 0) {
-          c.addEffect({ id: "dragonAd", kind: "adBuff", time: 1e9, value: st.dragons * 7, label: "🐉", color: "#ffb347" });
-          c.addEffect({ id: "dragonAp", kind: "apBuff", time: 1e9, value: st.dragons * 10, label: "", color: "#ffb347" });
+          // Her ejderha yigini: saldiri, yetenek, dayaniklilik ve hiz
+          const n = st.dragons;
+          const soul = n >= 4 ? 1.6 : 1;
+          c.addEffect({ id: "dragonAd", kind: "adBuff", time: 1e9, value: n * 7 * soul, label: "🐉", color: "#ffb347" });
+          c.addEffect({ id: "dragonAp", kind: "apBuff", time: 1e9, value: n * 10 * soul, label: "", color: "#ffb347" });
+          c.addEffect({ id: "dragonArmor", kind: "armorBuff", time: 1e9, value: n * 6 * soul, label: "", color: "#ffb347" });
+          c.addEffect({ id: "dragonHaste", kind: "haste", time: 1e9, value: n * 0.02 * soul, label: "", color: "#ffb347" });
         }
         if (st.baronTimer > 0) {
           c.addEffect({ id: "baronAd", kind: "adBuff", time: st.baronTimer, value: 28, label: "🐲", color: "#c9a0ff" });
           c.addEffect({ id: "baronAp", kind: "apBuff", time: st.baronTimer, value: 36, label: "", color: "#c9a0ff" });
+          c.addEffect({ id: "baronHaste", kind: "haste", time: st.baronTimer, value: 0.12, label: "", color: "#c9a0ff" });
         }
       }
     }
@@ -708,12 +775,15 @@ export class World {
         continue;
       }
       const bush = u.kind === "champion" ? this.bushAt(u.pos) : -1;
+      // Calida saldiri yapmak gizlenmeyi kisa sureligine bozar (LoL kurali)
+      const revealedByAttack = bush >= 0 && u.outOfAttack < 1.5;
       let seen = false;
       for (const o of observers[enemy]) {
         const d = dist(o.pos, u.pos);
         if (d > o.stats.sightRange) continue;
-        if (bush >= 0) {
-          if (d > 78 && this.bushAt(o.pos) !== bush) continue;
+        if (bush >= 0 && !revealedByAttack) {
+          // Caliyi ancak icine giren gorur
+          if (this.bushAt(o.pos) !== bush) continue;
         }
         if (!o.isStructure && d > 90 && !hasLineOfSight(o.pos, u.pos)) continue;
         seen = true;
@@ -735,6 +805,12 @@ export class World {
       return;
     }
     this.time += dt;
+
+    // Ekran ortasi bildirimlerin omru
+    if (this.announcements.length > 0) {
+      for (const a of this.announcements) a.life -= dt;
+      this.announcements = this.announcements.filter((a) => a.life > 0);
+    }
 
     // Dalga zamanlayici
     this.waveTimer -= dt;

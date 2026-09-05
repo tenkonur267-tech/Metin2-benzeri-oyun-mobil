@@ -197,6 +197,8 @@ export interface TerrainBuild {
   ground: THREE.Mesh;
   /** Nehir materyali; her karede `uTime` guncellenir. */
   water: THREE.ShaderMaterial;
+  /** Havadaki savas sisi katmani. */
+  fow: THREE.ShaderMaterial;
   /** Hazir modellerden olusan dekor (savas sisi ayrica uygulanir). */
   decor: THREE.Group;
   visionTexture: THREE.DataTexture;
@@ -361,6 +363,9 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   for (const name of PEBBLE_MODELS) {
     if (props.has(name)) props.recolor(name, PEBBLE_PALETTE);
   }
+  const clouds = buildFowClouds(visionTexture);
+  group.add(clouds.mesh);
+
   const decor = new THREE.Group();
   decor.add(buildJungleWalls(props, rng));
   decor.add(buildBorderWall(props, rng));
@@ -372,7 +377,7 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
 
   return {
     group, ground, decor,
-    water: waterMat,
+    water: waterMat, fow: clouds.material,
     visionTexture, visionData, visionSize: VISION_SIZE,
   };
 }
@@ -384,6 +389,78 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
  * kenarlarda kopuk seridi ve derinlige gore koyulasan turkuaz bir renk.
  * Zemin altta gorunmeye devam etsin diye yari saydamdir.
  */
+/**
+ * Savas sisi bulutlari.
+ *
+ * Haritanin uzerinde, karakterlerin ustunde duran ince bir bulut
+ * tabakasi. Gorulen yerlerde tamamen saydam, hic gorulmemis yerlerde
+ * yogun; kesfedilmis ama su an gorulmeyen yerlerde araya girer.
+ * Sis "havada" durdugu icin zeminin rengi bozulmaz.
+ */
+function buildFowClouds(vision: THREE.Texture): {
+  mesh: THREE.Mesh;
+  material: THREE.ShaderMaterial;
+} {
+  const geo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 1, 1);
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(MAP_SIZE / 2, 0, MAP_SIZE / 2);
+
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uVision: { value: vision },
+      uMapSize: { value: MAP_SIZE },
+      uColor: { value: new THREE.Color(0x6d879c) },
+    },
+    vertexShader: `
+      varying vec3 vWorld;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform sampler2D uVision;
+      uniform float uMapSize;
+      uniform vec3 uColor;
+      varying vec3 vWorld;
+
+      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n2(vec2 p) {
+        vec2 i = floor(p); vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1.0, 0.0)), u.x),
+                   mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
+
+      void main() {
+        float vis = texture2D(uVision, vWorld.xz / uMapSize).r;
+        float hidden = 1.0 - clamp(vis, 0.0, 1.0);
+        if (hidden < 0.02) discard;
+        // Iki yonde yavasca suzulen bulut katmani
+        float a = n2(vWorld.xz * 0.0075 + vec2(uTime * 0.010, uTime * 0.006));
+        float b = n2(vWorld.xz * 0.019 - vec2(uTime * 0.015, uTime * 0.009));
+        float f = 0.55 + (a * 0.62 + b * 0.38) * 0.72;
+        float alpha = clamp(hidden * hidden * f * 1.25, 0.0, 0.94);
+        if (alpha < 0.02) discard;
+        gl_FragColor = vec4(uColor * (0.78 + 0.42 * a), alpha);
+      }
+    `,
+  });
+
+  const mesh = new THREE.Mesh(geo, material);
+  // Karakterlerin ustunde dursun; oyuncu sisin altindan bakar
+  mesh.position.y = 78;
+  mesh.renderOrder = 30;
+  mesh.frustumCulled = false;
+  return { mesh, material };
+}
+
 export function makeWaterMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
@@ -483,31 +560,17 @@ function texBase(): string {
  */
 export const fowTime = { value: 0 };
 
-/** Savas sisi: gorulmeyen yerler karartilmaz, sisle ortulur. */
+/**
+ * Savas sisi (zemin ve model tarafi).
+ *
+ * Sis artik zemine boyanmiyor; havada ayri bir bulut katmani olarak
+ * ciziliyor. Burada yalnizca gorulmeyen bolge hafifce karartilir,
+ * boylece sisin altindaki arazi kendi rengini korur.
+ */
 const FOW_GLSL = `
-float fowHash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-float fowNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(fowHash(i), fowHash(i + vec2(1.0, 0.0)), u.x),
-    mix(fowHash(i + vec2(0.0, 1.0)), fowHash(i + vec2(1.0, 1.0)), u.x),
-    u.y);
-}
 vec3 applyFow(vec3 col, float vis, vec2 world, float t) {
   float hidden = 1.0 - clamp(vis, 0.0, 1.0);
-  // Iki katman suzulen sis: yogunlugu yavasca degisir
-  float n = fowNoise(world * 0.012 + vec2(t * 0.011, t * -0.007)) * 0.6
-          + fowNoise(world * 0.031 - vec2(t * 0.017, t * 0.013)) * 0.4;
-  vec3 mist = vec3(0.34, 0.42, 0.52) * (0.72 + 0.55 * n);
-  // Sis yalnizca hic gorulmemis bolgelerde yogunlasir; bir kez
-  // kesfedilen yer neredeyse tamamen acik kalir.
-  float thick = hidden * hidden;
-  vec3 dark = col * mix(1.0, 0.5, hidden);
-  return mix(dark, mist, thick * 0.92);
+  return col * mix(1.0, 0.55, hidden);
 }
 `;
 

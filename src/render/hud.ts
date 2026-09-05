@@ -80,8 +80,63 @@ export function drawHud(
   drawEventLog(g, world, L);
   drawJoystick(g, L, ui);
   drawButtons(g, world, L, ui, p);
-  if (!p.alive) drawDeathOverlay(g, L, p);
+  if (!p.alive) drawDeathOverlay(g, world, L, p);
+  drawVignette(g, L, p);
+  drawAnnouncements(g, world, L);
   drawToasts(g, L, ui);
+}
+
+/**
+ * Hasar vinyeti: can azaldikca ekran kenarlari kizarir, cok dususte
+ * yavasca nabiz gibi atar. Cana bakmadan da tehlikeyi hissettirir.
+ */
+function drawVignette(g: CanvasRenderingContext2D, L: HudLayout, p: Champion): void {
+  if (!p.alive) return;
+  const hp = clamp(p.hp / Math.max(1, p.stats.maxHp), 0, 1);
+  if (hp > 0.5) return;
+  // 0.5 canda 0, 0 canda 1
+  const t = 1 - hp / 0.5;
+  const pulse = hp < 0.25 ? 0.82 + 0.18 * Math.sin(performance.now() / 190) : 1;
+  const r = Math.max(L.w, L.h);
+  const grad = g.createRadialGradient(L.w / 2, L.h / 2, r * 0.34, L.w / 2, L.h / 2, r * 0.78);
+  grad.addColorStop(0, "rgba(150,10,10,0)");
+  grad.addColorStop(1, `rgba(150,10,10,${(0.62 * t * pulse).toFixed(3)})`);
+  g.save();
+  g.fillStyle = grad;
+  g.fillRect(0, 0, L.w, L.h);
+  g.restore();
+}
+
+/** Ekran ortasi kirim/asist bildirimleri. */
+function drawAnnouncements(g: CanvasRenderingContext2D, world: World, L: HudLayout): void {
+  if (world.announcements.length === 0) return;
+  g.save();
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  let y = L.h * 0.26;
+  for (const a of world.announcements) {
+    const t = clamp(a.life / a.maxLife, 0, 1);
+    // Girerken buyur, cikarken soner
+    const grow = 1 + (1 - Math.min(1, (a.maxLife - a.life) / 0.18)) * 0.35;
+    g.globalAlpha = Math.min(1, t * 3);
+    const size = Math.round(L.h * 0.062 * grow);
+    g.font = `900 ${size}px system-ui, sans-serif`;
+    g.lineWidth = size * 0.16;
+    g.strokeStyle = "rgba(0,0,0,0.7)";
+    g.strokeText(a.text, L.w / 2, y);
+    g.fillStyle = a.color;
+    g.fillText(a.text, L.w / 2, y);
+    if (a.sub) {
+      const s2 = Math.round(size * 0.36);
+      g.font = `700 ${s2}px system-ui, sans-serif`;
+      g.lineWidth = s2 * 0.3;
+      g.strokeText(a.sub, L.w / 2, y + size * 0.72);
+      g.fillStyle = "rgba(255,255,255,0.92)";
+      g.fillText(a.sub, L.w / 2, y + size * 0.72);
+    }
+    y += L.h * 0.11;
+  }
+  g.restore();
 }
 
 
@@ -852,7 +907,12 @@ export function smartTarget(
 
 // ---------------------------------------------------------------------------
 
-function drawDeathOverlay(g: CanvasRenderingContext2D, L: HudLayout, p: Champion): void {
+function drawDeathOverlay(
+  g: CanvasRenderingContext2D,
+  world: World,
+  L: HudLayout,
+  p: Champion,
+): void {
   g.save();
   g.fillStyle = "rgba(40,6,10,0.35)";
   g.fillRect(0, 0, L.w, L.h);
@@ -867,6 +927,16 @@ function drawDeathOverlay(g: CanvasRenderingContext2D, L: HudLayout, p: Champion
   g.fillStyle = "#c8dcf0";
   g.font = `12px ${FONT}`;
   g.fillText("Yeniden dogus", L.w / 2, L.h / 2 + 46);
+
+  // Olum kamerasi kimi izliyor
+  const watched = world.champions.find(
+    (c) => c.team === p.team && c !== p && c.alive,
+  );
+  if (watched) {
+    g.fillStyle = "#8fd8ff";
+    g.font = `12px ${FONT}`;
+    g.fillText(`👁 ${watched.displayName()} izleniyor`, L.w / 2, L.h / 2 + 68);
+  }
   g.restore();
 }
 

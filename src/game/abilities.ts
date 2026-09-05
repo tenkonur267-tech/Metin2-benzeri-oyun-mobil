@@ -5,6 +5,7 @@ import { isBlockedCircle } from "./grid";
 import { makeProjectile, makeZone } from "./projectile";
 import type { Unit } from "./units";
 import type { DamageType } from "./types";
+import { abilityHitPassives, markSpellblade } from "./passives";
 import type { World } from "./world";
 
 export interface AimInput {
@@ -35,6 +36,8 @@ function hurt(
   label: string,
 ): void {
   u.takeDamage(world, { amount, type, sourceId: c.id, label });
+  // Yetenek isabetine bagli esya pasifleri (yakma, ek buyu hasari...)
+  abilityHitPassives(world, c, u, amount);
 }
 
 /** Belirli yaricaptaki dusmanlar. */
@@ -644,6 +647,8 @@ export function castAbility(world: World, c: Champion, key: "Q" | "W" | "E" | "R
   st.cd = c.cooldownFor(key);
   c.castAnim = 0.3;
   c.castAnimKey = key;
+  // Uclu Mizrak: sonraki normal saldiri guclendirilir
+  markSpellblade(c);
   if (c.isPlayer) sfx.play(key === "R" ? "ult" : "cast");
   c.cancelRecall();
   if (c.hasEffect("stealth") && (key === "Q" || key === "R")) c.removeEffect("golge_w");
