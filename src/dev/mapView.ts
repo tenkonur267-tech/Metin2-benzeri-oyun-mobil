@@ -67,7 +67,6 @@ async function main(): Promise<void> {
   const tick = (): void => {
     const t = (performance.now() - t0) / 1000;
     terrain.water.uniforms.uTime.value = t;
-    terrain.mist.uniforms.uTime.value = t;
     fowTime.value = t;
     renderer.render(scene, camera);
     const now = performance.now();

@@ -452,7 +452,11 @@ export abstract class Unit {
   /** Otomatik saldiri hasarini uygular (menzilliler mermi firlatir). */
   protected landAutoAttack(world: World, target: Unit): void {
     const crit = Math.random() < this.stats.crit;
-    const dmg = this.stats.ad * (crit ? 1.75 : 1);
+    // Kombonun ucuncu vurusu bitiricidir: belirgin sekilde daha agir.
+    // Yalniz sampiyonlarda; minyon ve canavarlarda kombo yok.
+    const finisher =
+      this.kind === "champion" && this.comboStep % COMBO_LENGTH === COMBO_LENGTH - 1;
+    const dmg = this.stats.ad * (crit ? 1.75 : 1) * (finisher ? COMBO_FINISHER_DMG : 1);
     if (this.isRanged) {
       world.spawnAutoProjectile(this, target, dmg, crit);
     } else {
@@ -503,6 +507,11 @@ export abstract class Unit {
  * Esit mesafedeki iki dusman arasinda gidip gelmeyi onler.
  */
 const TARGET_SWITCH_MARGIN = 6;
+
+/** Kombo zincirinin uzunlugu (animasyon tarafiyla ayni olmali). */
+export const COMBO_LENGTH = 3;
+/** Bitirici vurusun hasar carpani. */
+export const COMBO_FINISHER_DMG = 1.6;
 
 // ---------------------------------------------------------------------------
 // Minyon

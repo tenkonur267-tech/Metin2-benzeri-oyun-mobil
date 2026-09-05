@@ -162,18 +162,24 @@ export const LOADOUTS: Record<string, Loadout> = {
       Recall: "Dance_Loop",
     },
     attack: "Sword_Attack",
-    // 3'lu kombo. `Sword_Attack_RM` ile `Sword_Attack` ayni savurmanin
-    // iki kopyasi (biri kok hareketli) oldugu icin ekranda tek bir
-    // animasyon gibi duruyordu; zincir artik gercekten farkli uc
-    // hareketten olusuyor: genis savurma -> hizli sokme -> agir darbe.
+    // 3'lu kombo. Kutuphanede tek bir kilic savurmasi oldugu icin
+    // zincir en cok ayrisan uc hareketten kuruldu:
+    // genis savurma (1.5 sn) -> hizli sokme (0.83 sn) -> govdeyi
+    // dondurup atilan agir darbe (1.0 sn).
     combo: ["Punch_Jab", "Punch_Cross"],
     cast: "Spell_Simple_Shoot",
     // Q kavrayici darbe, W tas kalkan, E ileri savurma, R cevresel sarsinti
+    // Yetenek animasyonlari normal vurus zinciriyle cakismasin diye
+    // ayri kliplerden secildi.
     abilities: {
-      Q: "Punch_Cross",
+      // Q: onundeki koniye savrulan sok -> iki elle itis
+      Q: "Spell_Simple_Shoot",
+      // W: uzerine kabuk cekme -> koruma durusuna gecis
       W: "Spell_Simple_Enter",
+      // E: ileri atilma -> takla
       E: "Roll",
-      R: "Spell_Simple_Shoot",
+      // R: yeri parcalama -> yere iniş darbesi
+      R: "Jump_Land",
     },
     mainHand: "sword-2handed",
     handScale: 0.66,

@@ -1,6 +1,14 @@
 import { sfx } from "../core/audio";
 import { clamp, type Vec2 } from "../core/math";
-import { LANES, MAP_SIZE, TEAM_COLORS, lanePath } from "../game/constants";
+import {
+  BUSHES,
+  LANES,
+  MAP_SIZE,
+  NEXUS_POS,
+  TEAM_COLORS,
+  WALLS,
+  lanePath,
+} from "../game/constants";
 import type { Champion } from "../game/champion";
 import type { World } from "../game/world";
 import type { HudLayout } from "./layout";
@@ -55,40 +63,6 @@ export const ABILITY_ICON: Record<string, string> = {
 
 const FONT = "sans-serif";
 
-/**
- * Kombo sayaci.
- *
- * Ardisik vuruslar zinciri ilerletir; oyuncunun zincirin nerede
- * oldugunu gorebilmesi icin basinin ustunde sayilir.
- */
-function drawCombo(g: CanvasRenderingContext2D, world: World, view: View): void {
-  const p = world.player;
-  if (!p.alive || p.comboRest <= 0 || p.comboStep < 1) return;
-  const h = view.groundHeight(p.pos.x, p.pos.y) + 46;
-  if (view.isBehind(p.pos.x, p.pos.y, h)) return;
-  const s = view.toScreen(p.pos.x, p.pos.y, h);
-
-  const n = p.comboStep + 1;
-  // Zincir sonuna dogru buyur ve renk isinir
-  const fade = clamp(p.comboRest / 0.6, 0, 1);
-  const size = 20 + Math.min(n, 6) * 1.6;
-  g.save();
-  g.globalAlpha = fade;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.font = `800 ${size}px system-ui, sans-serif`;
-  g.lineWidth = 4;
-  g.strokeStyle = "rgba(0,0,0,0.65)";
-  g.strokeText(`x${n}`, s.x, s.y);
-  g.fillStyle = n >= 3 ? "#ffd24a" : "#ffffff";
-  g.fillText(`x${n}`, s.x, s.y);
-  g.font = "700 10px system-ui, sans-serif";
-  g.strokeText("KOMBO", s.x, s.y + size * 0.72);
-  g.fillStyle = "#ffe8a8";
-  g.fillText("KOMBO", s.x, s.y + size * 0.72);
-  g.restore();
-}
-
 export function drawHud(
   g: CanvasRenderingContext2D,
   world: World,
@@ -99,7 +73,6 @@ export function drawHud(
   const p = world.player;
 
   drawUnitOverlays(g, world, view);
-  drawCombo(g, world, view);
   drawFloatingText(g, world, view);
   drawTopBar(g, world, L);
   drawPlayerPanel(g, world, L, p);
@@ -472,20 +445,28 @@ function drawMinimap(g: CanvasRenderingContext2D, world: World, view: View, L: H
   g.save();
   roundRect(g, m.x, m.y, m.w, m.h, 5);
   g.clip();
-  g.fillStyle = "#122029";
+  // Orman zemini
+  g.fillStyle = "#2c4433";
   g.fillRect(m.x, m.y, m.w, m.h);
 
-  // Nehir
-  g.strokeStyle = "rgba(45,110,145,0.7)";
-  g.lineWidth = m.w * 0.09;
+  // Nehir: koridorlarin kestigi yerde kesilir (arazide de oyle)
+  g.strokeStyle = "rgba(52,116,132,0.85)";
+  g.lineWidth = m.w * 0.075;
+  g.lineCap = "butt";
   g.beginPath();
   g.moveTo(m.x, m.y);
   g.lineTo(m.x + m.w, m.y + m.h);
   g.stroke();
 
+  // Gecilmez orman duvarlari: haritanin okunmasini saglayan asil sey
+  g.fillStyle = "rgba(24,36,44,0.92)";
+  for (const w of WALLS) {
+    g.fillRect(m.x + w.x * k, m.y + w.y * k, Math.max(1.5, w.w * k), Math.max(1.5, w.h * k));
+  }
+
   // Koridorlar
-  g.strokeStyle = "rgba(130,150,105,0.6)";
-  g.lineWidth = m.w * 0.05;
+  g.strokeStyle = "rgba(168,148,104,0.85)";
+  g.lineWidth = m.w * 0.045;
   g.lineJoin = "round";
   g.lineCap = "round";
   for (const lane of LANES) {
@@ -494,6 +475,23 @@ function drawMinimap(g: CanvasRenderingContext2D, world: World, view: View, L: H
     g.moveTo(m.x + path[0].x * k, m.y + path[0].y * k);
     for (let i = 1; i < path.length; i++) g.lineTo(m.x + path[i].x * k, m.y + path[i].y * k);
     g.stroke();
+  }
+
+  // Usler
+  for (const team of [0, 1] as const) {
+    const n = NEXUS_POS[team];
+    g.fillStyle = team === 0 ? "rgba(70,150,235,0.28)" : "rgba(220,90,80,0.28)";
+    g.beginPath();
+    g.arc(m.x + n.x * k, m.y + n.y * k, m.w * 0.14, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // Calilar
+  g.fillStyle = "rgba(58,110,66,0.9)";
+  for (const b of BUSHES) {
+    g.beginPath();
+    g.arc(m.x + b.x * k, m.y + b.y * k, Math.max(1.4, b.r * k), 0, Math.PI * 2);
+    g.fill();
   }
 
   // Yapilar
@@ -523,18 +521,36 @@ function drawMinimap(g: CanvasRenderingContext2D, world: World, view: View, L: H
     g.fillRect(m.x + mi.pos.x * k - 1, m.y + mi.pos.y * k - 1, 2, 2);
   }
 
-  // Sampiyonlar
+  // Sampiyonlar: portreleri kucuk birer simge olarak cizilir
   for (const c of world.champions) {
     if (!c.alive) continue;
     if (c.team !== p.team && !c.visibleTo[p.team]) continue;
     const sx = m.x + c.pos.x * k;
     const sy = m.y + c.pos.y * k;
-    g.fillStyle = c.isPlayer ? "#ffe08a" : TEAM_COLORS[c.team];
+    const r = c.isPlayer ? m.w * 0.045 : m.w * 0.038;
+
+    const face = championPortrait(c.def.id);
+    if (face.width > 0) {
+      g.save();
+      g.beginPath();
+      g.arc(sx, sy, r, 0, Math.PI * 2);
+      g.clip();
+      // Portrenin ust govdesi kirpilarak dairenin icine oturtulur
+      const src = face.width * 0.62;
+      g.drawImage(face, (face.width - src) / 2, face.height * 0.06, src, src, sx - r, sy - r, r * 2, r * 2);
+      g.restore();
+    } else {
+      g.fillStyle = TEAM_COLORS[c.team];
+      g.beginPath();
+      g.arc(sx, sy, r, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // Takim halkasi; oyuncunun kendisi altin renkli
+    g.strokeStyle = c.isPlayer ? "#ffe08a" : TEAM_COLORS[c.team];
+    g.lineWidth = c.isPlayer ? 2.2 : 1.8;
     g.beginPath();
-    g.arc(sx, sy, c.isPlayer ? 4 : 3.2, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = "rgba(0,0,0,0.6)";
-    g.lineWidth = 0.8;
+    g.arc(sx, sy, r, 0, Math.PI * 2);
     g.stroke();
   }
 

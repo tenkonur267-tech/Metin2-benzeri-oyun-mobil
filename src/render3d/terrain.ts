@@ -197,9 +197,6 @@ export interface TerrainBuild {
   ground: THREE.Mesh;
   /** Nehir materyali; her karede `uTime` guncellenir. */
   water: THREE.ShaderMaterial;
-  mist: THREE.ShaderMaterial;
-  /** Orman sisi katmani (dusuk kalitede gizlenir). */
-  mistMesh: THREE.Mesh;
   /** Hazir modellerden olusan dekor (savas sisi ayrica uygulanir). */
   decor: THREE.Group;
   visionTexture: THREE.DataTexture;
@@ -364,9 +361,6 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
   for (const name of PEBBLE_MODELS) {
     if (props.has(name)) props.recolor(name, PEBBLE_PALETTE);
   }
-  const mist = buildMist();
-  group.add(mist.mesh);
-
   const decor = new THREE.Group();
   decor.add(buildJungleWalls(props, rng));
   decor.add(buildBorderWall(props, rng));
@@ -378,7 +372,7 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
 
   return {
     group, ground, decor,
-    water: waterMat, mist: mist.material, mistMesh: mist.mesh,
+    water: waterMat,
     visionTexture, visionData, visionSize: VISION_SIZE,
   };
 }
@@ -390,92 +384,6 @@ export function buildTerrain(props: PropLibrary): TerrainBuild {
  * kenarlarda kopuk seridi ve derinlige gore koyulasan turkuaz bir renk.
  * Zemin altta gorunmeye devam etsin diye yari saydamdir.
  */
-/**
- * Orman sisi.
- *
- * Koridorlardan ve uslerden uzakta, zemine yakin suzulen ince bir sis
- * tabakasi. Yogunlugu CPU'da her koseye yazilir (koridorda 0, ormanin
- * icinde 1); kayma ve kabarma shader'da yapilir.
- */
-function buildMist(): { mesh: THREE.Mesh; material: THREE.ShaderMaterial } {
-  const SEG = 110;
-  const geo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, SEG, SEG);
-  geo.rotateX(-Math.PI / 2);
-  geo.translate(MAP_SIZE / 2, 0, MAP_SIZE / 2);
-
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const amount = new Float32Array(pos.count);
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const z = pos.getZ(i);
-    // Koridorlarda ve nehirde acilir, ormanda yogunlasir
-    let a = smooth(LANE_HALF * 1.15, LANE_FADE * 1.5, laneDist(x, z));
-    a *= smooth(RIVER_HALF * 0.9, RIVER_FADE * 1.2, riverDist(x, z));
-    for (const team of [0, 1] as const) {
-      const n = NEXUS_POS[team];
-      a *= smooth(BASE_R * 0.8, BASE_R * 1.35, Math.hypot(x - n.x, z - n.y));
-    }
-    // Duvarlarin tepesinde sis birikmez
-    a *= 1 - smooth(0, WALL_SLOPE, wallDepth(x, z));
-    amount[i] = a;
-    pos.setY(i, terrainHeight(x, z) + 6);
-  }
-  geo.setAttribute("aMist", new THREE.BufferAttribute(amount, 1));
-  geo.computeVertexNormals();
-
-  const material = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    uniforms: {
-      uTime: { value: 0 },
-      uColor: { value: new THREE.Color(0xb6cbdb) },
-    },
-    vertexShader: `
-      attribute float aMist;
-      varying float vMist;
-      varying vec3 vWorld;
-      void main() {
-        vMist = aMist;
-        vec4 wp = modelMatrix * vec4(position, 1.0);
-        vWorld = wp.xyz;
-        gl_Position = projectionMatrix * viewMatrix * wp;
-      }
-    `,
-    fragmentShader: `
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying float vMist;
-      varying vec3 vWorld;
-
-      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float n2(vec2 p) {
-        vec2 i = floor(p); vec2 f = fract(p);
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        return mix(mix(h(i), h(i + vec2(1.0, 0.0)), u.x),
-                   mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), u.x), u.y);
-      }
-
-      void main() {
-        if (vMist < 0.01) discard;
-        vec2 p = vWorld.xz;
-        // Iki yonde kayan bulut katmani
-        float a = n2(p * 0.010 + vec2(uTime * 0.013, uTime * 0.008));
-        float b = n2(p * 0.026 - vec2(uTime * 0.021, uTime * 0.011));
-        float f = a * 0.65 + b * 0.35;
-        f = smoothstep(0.24, 0.78, f);
-        float alpha = vMist * f * 0.52;
-        if (alpha < 0.004) discard;
-        gl_FragColor = vec4(uColor, alpha);
-      }
-    `,
-  });
-
-  const mesh = new THREE.Mesh(geo, material);
-  mesh.renderOrder = 2;
-  mesh.frustumCulled = false;
-  return { mesh, material };
-}
-
 export function makeWaterMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
